@@ -1,0 +1,51 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: phx-maplibre-dev:latest
+    ports:
+      - "4001:4001"
+      - "4002:4002"
+    volumes:
+      # :Z relabels the checkout for SELinux-enforcing Podman hosts; Docker
+      # and non-SELinux runtimes ignore the flag.
+      - ..:/workspace:Z
+      - ${HOME}/.config/opencode:/root/.config/opencode
+      - ${HOME}/.local/share/opencode/auth.json:/root/.local/share/opencode/auth.json
+    working_dir: /workspace
+    environment:
+      MIX_ENV: dev
+      DATABASE_URL: ecto://postgres:postgres@postgres:5432/phx_maplibre_dev
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: phx_maplibre_dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: sleep infinity
+
+  postgres:
+    # postgis/postgis publishes amd64 only (README: "Supported architecture: amd64").
+    # Its CI already builds arm64 on native runners but gates the push to the amd64 job
+    # until the digest-push + manifest-merge rollout lands — tracked in
+    # https://github.com/postgis/docker-postgis/pull/432 (and #448).
+    # imresamu/postgis is the same maintainer's multi-arch build from the same
+    # Dockerfiles; swap back to postgis/postgis:18-3.6-alpine once #432 ships.
+    image: imresamu/postgis:18-3.6-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: phx_maplibre_dev
+      PGDATA: /var/lib/postgresql/18/docker
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

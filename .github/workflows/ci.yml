@@ -1,0 +1,348 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Compile, ExUnit, JS unit tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgis:
+        # Same image the devcontainer uses (multi-arch build of postgis/postgis).
+        image: imresamu/postgis@sha256:f172525d79ce63377228676dfe262daeee4539a32846bdab7be8b5abda1291ce # 18-3.6-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
+        with:
+          otp-version: "27.x"
+          elixir-version: "1.20.x"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+
+      - name: Restore deps and build cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-
+
+      - name: Fetch dependencies
+        run: mix deps.get
+
+      # The library and the districts demo must stay warning-free. The GSD
+      # tracker cannot: compiling its Postgrex types expands the geo_postgis
+      # dependency's code and emits 4 "bitstring specifier int32" warnings that
+      # no change in this repository can silence.
+      - name: Compile phx_maplibre (warnings as errors)
+        run: mix compile --warnings-as-errors
+        working-directory: apps/phx_maplibre
+        env:
+          MIX_ENV: test
+
+      - name: Compile demo_berlin_districts (warnings as errors)
+        run: mix compile --warnings-as-errors
+        working-directory: apps/demo_berlin_districts
+        env:
+          MIX_ENV: test
+
+      - name: Compile demo_gsd_tracker
+        run: mix compile
+        working-directory: apps/demo_gsd_tracker
+        env:
+          MIX_ENV: test
+
+      - name: Check formatting
+        run: mix format --check-formatted
+
+      - name: Build ExDoc documentation
+        run: |
+          mix docs
+          test -f doc/index.html
+          test -f doc/llms.txt
+          test -f doc/PhxMaplibre.epub
+        working-directory: apps/phx_maplibre
+        env:
+          MIX_ENV: dev
+
+      - name: Smoke-test the packaged library as an external dependency
+        run: |
+          mix hex.build
+          consumer="$(mktemp -d)"
+          mkdir -p "$consumer/deps/phx_maplibre" "$consumer/config"
+          tar -xOf phx_maplibre-*.tar contents.tar.gz | tar -xzf - -C "$consumer/deps/phx_maplibre"
+          cp fixtures/hex_consumer/mix.exs "$consumer/mix.exs"
+          cp fixtures/hex_consumer/config.exs "$consumer/config/config.exs"
+          cd "$consumer"
+          mix deps.get
+          mix compile
+          node --input-type=module --eval 'import "./deps/phx_maplibre/priv/js/phx_maplibre.js"'
+        working-directory: apps/phx_maplibre
+        env:
+          MIX_ENV: dev
+
+      - name: Create and migrate the test database
+        run: |
+          mix ecto.create
+          mix ecto.migrate
+        working-directory: apps/demo_gsd_tracker
+        env:
+          MIX_ENV: test
+
+      - name: Run the umbrella test suite
+        run: mix test
+        env:
+          MIX_ENV: test
+
+      - name: Run the phx_maplibre JS unit tests
+        run: node --test apps/phx_maplibre/test/js/
+
+      - name: Build demo_berlin_districts assets
+        run: |
+          npm ci --prefix assets
+          mix tailwind.install --if-missing
+          mix esbuild.install --if-missing
+          mix assets.build
+        working-directory: apps/demo_berlin_districts
+
+      - name: Build demo_gsd_tracker assets
+        run: |
+          npm ci --prefix assets
+          mix tailwind.install --if-missing
+          mix esbuild.install --if-missing
+          mix assets.build
+        working-directory: apps/demo_gsd_tracker
+
+  playwright:
+    name: Playwright (both demo apps)
+    runs-on: ubuntu-latest
+
+    services:
+      postgis:
+        image: imresamu/postgis@sha256:f172525d79ce63377228676dfe262daeee4539a32846bdab7be8b5abda1291ce # 18-3.6-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
+        with:
+          otp-version: "27.x"
+          elixir-version: "1.20.x"
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+
+      - name: Restore deps and build cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-
+
+      - name: Fetch dependencies
+        run: mix deps.get
+
+      - name: Install Playwright and asset dependencies
+        run: |
+          npm ci --prefix apps/demo_berlin_districts
+          npm ci --prefix apps/demo_berlin_districts/assets
+          npm ci --prefix apps/demo_gsd_tracker
+          npm ci --prefix apps/demo_gsd_tracker/assets
+
+      # Each demo pins its own @playwright/test version, so the matching
+      # browser build is installed from each app directory.
+      - name: Install Chromium for demo_berlin_districts
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/demo_berlin_districts
+
+      - name: Install Chromium for demo_gsd_tracker
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/demo_gsd_tracker
+
+      - name: Build demo_berlin_districts assets
+        run: |
+          mix tailwind.install --if-missing
+          mix esbuild.install --if-missing
+          mix assets.build
+        working-directory: apps/demo_berlin_districts
+
+      - name: Build demo_gsd_tracker assets
+        run: |
+          mix tailwind.install --if-missing
+          mix esbuild.install --if-missing
+          mix assets.build
+        working-directory: apps/demo_gsd_tracker
+
+      - name: Create and migrate the databases
+        run: |
+          MIX_ENV=dev mix ecto.create
+          MIX_ENV=dev mix ecto.migrate
+          MIX_ENV=test mix ecto.create
+          MIX_ENV=test mix ecto.migrate
+        working-directory: apps/demo_gsd_tracker
+
+      - name: Seed land cover data
+        run: mix gsd_tracker.fetch_land_cover
+        env:
+          MIX_ENV: dev
+
+      # One umbrella server serves both demos: districts on :4001, tracker on
+      # :4002.
+      - name: Start the umbrella dev server
+        run: |
+          nohup mix phx.server > phx-server.log 2>&1 &
+          for port in 4001 4002; do
+            for attempt in $(seq 1 60); do
+              if curl -sSf -o /dev/null "http://127.0.0.1:${port}/"; then
+                echo "port ${port} is up"
+                break
+              fi
+              if [ "$attempt" -eq 60 ]; then
+                echo "port ${port} never came up"
+                cat phx-server.log
+                exit 1
+              fi
+              sleep 2
+            done
+          done
+        env:
+          MIX_ENV: dev
+
+      - name: Run demo_berlin_districts Playwright suite
+        run: npx playwright test --reporter=line
+        working-directory: apps/demo_berlin_districts
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:4001
+
+      # This app's playwright.config.js only reuses an already running server
+      # when CI is unset (`reuseExistingServer: !process.env.CI`); with CI set
+      # it would try to start a second server on the port already in use.
+      - name: Run demo_gsd_tracker Playwright suite
+        run: npx playwright test --reporter=line
+        working-directory: apps/demo_gsd_tracker
+        env:
+          CI: ""
+
+      - name: Upload Playwright artifacts
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-artifacts
+          path: |
+            apps/demo_berlin_districts/test-results
+            apps/demo_berlin_districts/playwright-report
+            apps/demo_gsd_tracker/test-results
+            phx-server.log
+          if-no-files-found: ignore
+
+  release:
+    name: Build Hex package and publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [test, playwright]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
+        with:
+          otp-version: "27.x"
+          elixir-version: "1.20.x"
+
+      - name: Install Hex build tools
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+
+      - name: Fetch production dependencies
+        run: mix deps.get
+        env:
+          MIX_ENV: prod
+
+      - name: Verify the tag matches the package version
+        run: |
+          version="$(mix run --no-start --eval 'IO.write(Mix.Project.config()[:version])')"
+          test "$GITHUB_REF_NAME" = "v$version"
+        working-directory: apps/phx_maplibre
+        env:
+          MIX_ENV: prod
+          # `mix run` evaluates the umbrella runtime config even with
+          # `--no-start`; these values satisfy its validation only.
+          SECRET_KEY_BASE: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          DATABASE_URL: ecto://postgres:postgres@localhost/gsd_tracker_prod
+
+      - name: Build the Hex package
+        run: mix hex.build
+        working-directory: apps/phx_maplibre
+        env:
+          MIX_ENV: prod
+
+      - name: Publish the Hex package
+        run: mix hex.publish --yes
+        working-directory: apps/phx_maplibre
+        env:
+          MIX_ENV: prod
+          HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          package="$(find apps/phx_maplibre -maxdepth 1 -name 'phx_maplibre-*.tar' -print -quit)"
+          test -n "$package"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$package" --clobber
+          else
+            gh release create "$TAG" "$package" --generate-notes --title "$TAG"
+          fi

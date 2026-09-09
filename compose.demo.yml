@@ -1,0 +1,121 @@
+# Demo deployment: `docker compose -f compose.demo.yml up -d --build`.
+# Secrets come from an untracked .env beside this file (SECRET_KEY_BASE=...).
+# Traefik (host network, default TLS via the letsencrypt resolver) routes by
+# the labels below. gsd_tracker.weltenseglr.de cannot get a Let's Encrypt
+# certificate (underscores are refused), so gsd-tracker.weltenseglr.de is the
+# canonical host and the underscore variant rides along.
+services:
+  postgres:
+    image: imresamu/postgis:18-3.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: gsd_tracker_prod
+      PGDATA: /var/lib/postgresql/18/docker
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      internal:
+
+  migrate:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+      DATABASE_URL: ecto://postgres:postgres@postgres/gsd_tracker_prod
+      PGHOST: postgres
+      PGUSER: postgres
+      PGDATABASE: gsd_tracker_prod
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        cd /app/apps/demo_gsd_tracker
+        mix ecto.create --quiet || true
+        mix ecto.migrate
+    networks:
+      internal:
+
+  land-cover-import:
+    build:
+      context: .
+      dockerfile: deploy/geodata.Dockerfile
+    restart: "no"
+    # Generated geodata is intentionally not part of Git. Create
+    # land_covers.dump with apps/demo_gsd_tracker/priv/scripts/extract_land_cover.sh
+    # before starting this stack. The local dump is mode 0600; this also works
+    # under rootless Podman.
+    user: "0"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: gsd_tracker_prod
+      LAND_COVER_DUMP_PATH: /seed/land_covers.dump
+    volumes:
+      - ./apps/demo_gsd_tracker/priv/data/land_covers.dump:/seed/land_covers.dump:ro
+      - ./deploy/import-land-covers.sh:/usr/local/bin/import-land-covers:ro
+    entrypoint: ["/bin/sh", "/usr/local/bin/import-land-covers"]
+    networks:
+      internal:
+
+  app:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      land-cover-import:
+        condition: service_completed_successfully
+    environment:
+      PHX_SERVER: "1"
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+      DATABASE_URL: ecto://postgres:postgres@postgres/gsd_tracker_prod
+      PGHOST: postgres
+      PGUSER: postgres
+      PGDATABASE: gsd_tracker_prod
+      GSD_PHX_HOST: gsd-tracker.weltenseglr.de
+      DEMO_PHX_HOST: phx-maplibre.demo.weltenseglr.de
+      GSD_COUNT: "24000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=phx_maplibre_internal"
+      # Two routers on one service: bundling both hosts into one rule makes
+      # the ACME order include the underscore domain, which Let's Encrypt
+      # rejects wholesale — splitting lets the hyphen host get its cert.
+      - "traefik.http.routers.gsd-tracker.rule=Host(`gsd-tracker.weltenseglr.de`)"
+      - "traefik.http.services.gsd-tracker.loadbalancer.server.port=4002"
+      - "traefik.http.routers.gsd-tracker.service=gsd-tracker"
+      - "traefik.http.routers.gsd-tracker-alt.rule=Host(`gsd_tracker.weltenseglr.de`)"
+      - "traefik.http.routers.gsd-tracker-alt.service=gsd-tracker"
+      - "traefik.http.routers.phx-maplibre-demo.rule=Host(`phx-maplibre.demo.weltenseglr.de`)"
+      - "traefik.http.services.phx-maplibre-demo.loadbalancer.server.port=4001"
+      - "traefik.http.routers.phx-maplibre-demo.service=phx-maplibre-demo"
+    networks:
+      internal:
+
+volumes:
+  postgres_data:
+
+networks:
+  internal:
+    name: phx_maplibre_internal

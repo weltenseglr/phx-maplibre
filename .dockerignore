@@ -1,0 +1,9 @@
+.git
+.git_old
+_build
+deps
+apps/*/_build
+apps/*/deps
+apps/**/node_modules
+apps/**/doc
+apps/demo_gsd_tracker/priv/data/land_covers.dump

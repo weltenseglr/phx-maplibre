@@ -1,0 +1,27 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Demo app: mix phx.server",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd ${workspaceFolder}/apps/demo_berlin_districts && mix phx.server",
+      "cwd": "${workspaceFolder}/apps/demo_berlin_districts",
+      "env": {
+        "MIX_ENV": "dev"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Demo app: iex -S mix phx.server",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "cd ${workspaceFolder}/apps/demo_berlin_districts && iex -S mix phx.server",
+      "cwd": "${workspaceFolder}/apps/demo_berlin_districts",
+      "env": {
+        "MIX_ENV": "dev"
+      },
+      "console": "integratedTerminal"
+    }
+  ]
+}

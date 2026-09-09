@@ -1,0 +1,17 @@
+- /.git/
+- /.git_old/
+- /_build/
+- /deps/
+- /**/_build/
+- /**/deps/
+- /**/node_modules/
+- /.elixir_ls/
+- /test-results/
+- /.tmp/
+- /erl_crash.dump
+- /apps/**/test-results/
+- /apps/**/doc/
+- /apps/**/priv/static/assets/
+- /apps/**/priv/data/*.pbf
+- /apps/**/*.tar
+- /apps/demo_gsd_tracker/priv/data/land_covers.dump

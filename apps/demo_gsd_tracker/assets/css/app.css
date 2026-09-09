@@ -1,0 +1,176 @@
+@import "tailwindcss";
+@import "../node_modules/maplibre-gl/dist/maplibre-gl.css";
+@import "../../../phx_maplibre/priv/css/phx_maplibre.css";
+
+@source "../js/**/*.js";
+@source "../../lib/gsd_tracker_web/**/*.{ex,heex}";
+
+/* The oversight-portal palette, sampled from pigeonsarentreal.co.uk and
+   exposed as Tailwind colors so markup can use `bg-ink`, `bg-chrome`,
+   `border-slate/70`, `text-accent`, `text-body`, ...
+
+   Cool slate blues carry the surfaces, one warm salmon carries every accent
+   (headings, the live indicator, the hero value, the dossier header, the GSD
+   pins). Cards sit a step DARKER than the page, the way the source site's
+   header sits darker than its body, so panels read as inset rather than
+   floating. There is no pure white and no pure black anywhere. */
+@theme {
+  --color-ink: #22252e; /* page background */
+  --color-chrome: #1a1d26; /* header background, cards */
+  --color-warm: #342b33; /* the one warm surface: declassified facts */
+  --color-slate: #374359; /* button background: borders, elevated */
+  --color-slate-hover: #263346; /* button background, hover */
+  --color-accent: #e08878; /* titles + every accent */
+  --color-body: #c8c8c8; /* text */
+  --color-muted: #b4b8be; /* micro labels, eyebrows */
+  --color-note: #a2938c; /* warm sublabels */
+  --color-deep: #22242e; /* "black": text on accent fills */
+}
+
+/* ---------------------------------------------------------------------------
+   GSD Tracker chrome
+   --------------------------------------------------------------------------- */
+
+/* The header indicator tracks the LiveView transport. It starts offline until
+   the browser has connected, then Phoenix's phx-connected/disconnected events
+   toggle `.is-offline` as the connection changes. */
+.gsd-connection-status {
+  color: var(--color-accent);
+}
+
+.gsd-live-dot {
+  background-color: var(--color-accent);
+  animation: gsd-pulse 1.6s ease-in-out infinite;
+}
+
+.gsd-status-offline {
+  display: none;
+}
+
+.gsd-connection-status.is-offline {
+  color: var(--color-muted);
+}
+
+.gsd-connection-status.is-offline .gsd-live-dot {
+  background-color: var(--color-muted);
+  animation: none;
+}
+
+.gsd-connection-status.is-offline .gsd-status-live {
+  display: none;
+}
+
+.gsd-connection-status.is-offline .gsd-status-offline {
+  display: inline;
+}
+
+@keyframes gsd-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgb(224 136 120 / 0.55);
+  }
+
+  50% {
+    opacity: 0.3;
+    box-shadow: 0 0 0 5px rgb(224 136 120 / 0);
+  }
+}
+
+/* Declassified-facts ticker: one fact visible at a time, cycled with pure CSS.
+   Each `.gsd-fact` carries `--gsd-fact-index` and `--gsd-fact-count`, so the
+   cycle length grows with the number of facts (7s per fact). */
+.gsd-ticker {
+  position: relative;
+  height: 5.5rem;
+  overflow: hidden;
+}
+
+.gsd-fact {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: gsd-fact-cycle calc(var(--gsd-fact-count, 7) * 7s) linear infinite;
+  animation-delay: calc(var(--gsd-fact-index, 0) * 7s);
+}
+
+@keyframes gsd-fact-cycle {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  1% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  13.3% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  14.29%,
+  100% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* No motion: stack every fact instead of cycling them. */
+@media (prefers-reduced-motion: reduce) {
+  .gsd-live-dot {
+    animation: none;
+  }
+
+  .gsd-ticker {
+    height: auto;
+    overflow: visible;
+  }
+
+  .gsd-fact {
+    position: static;
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+
+  .gsd-fact + .gsd-fact {
+    margin-top: 0.75rem;
+  }
+}
+
+/* MapLibre's own attribution bar keeps a white background even under the
+   library's dark theme, which is the one bright rectangle left on the page.
+   Scoped to this app's dark root; the library's stylesheet is untouched. */
+[data-theme="dark"] .maplibregl-ctrl-attrib {
+  background-color: rgb(26 29 38 / 0.85);
+  color: #b4b8be;
+}
+
+[data-theme="dark"] .maplibregl-ctrl-attrib a {
+  color: #c8c8c8;
+}
+
+[data-theme="dark"] .maplibregl-ctrl-attrib-button {
+  background-color: rgb(26 29 38 / 0.85);
+  filter: invert(1);
+}
+
+/* Console scrollbar for the sidebar. */
+.gsd-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #374359 transparent;
+}
+
+.gsd-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.gsd-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.gsd-scroll::-webkit-scrollbar-thumb {
+  background-color: #374359;
+}

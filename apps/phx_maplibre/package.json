@@ -1,0 +1,11 @@
+{
+  "name": "phx_maplibre",
+  "version": "0.1.0",
+  "description": "PubSub-first MapLibre GL JS integration for Phoenix LiveView",
+  "license": "EUPL-1.2",
+  "type": "module",
+  "main": "priv/js/phx_maplibre.js",
+  "peerDependencies": {
+    "maplibre-gl": ">= 5.0.0 < 6.0.0"
+  }
+}

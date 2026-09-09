@@ -1,0 +1,25 @@
+.phx-maplibre {
+  min-height: 400px;
+  position: relative;
+}
+
+.phx-maplibre-popup-row { display: flex; gap: .5rem; margin-bottom: .25rem; }
+.phx-maplibre-popup-label { flex-basis: 40%; font-weight: 600; color: #111827; }
+.phx-maplibre-popup-value { flex: 1; word-break: break-word; color: #374151; }
+.phx-maplibre-popup-desc { margin: .5rem 0 0; font-size: .875rem; color: #4b5563; }
+.phx-maplibre-popup-details { margin-top: .5rem; }
+
+.maplibregl-popup-content { padding: 0; border-radius: .625rem; overflow: hidden; box-shadow: 0 4px 24px rgba(0, 0, 0, .12); }
+.maplibregl-popup-close-button { font-size: 1.125rem; line-height: 1; padding: .375rem .5rem; color: #6b7280; }
+.phx-maplibre-popup { padding: .875rem 1rem; }
+.phx-maplibre-popup-title { margin: 0; font-size: .9375rem; font-weight: 600; color: #111827; }
+.phx-maplibre-popup-type { margin: .25rem 0 0; font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: #9ca3af; }
+
+[data-theme="dark"] .maplibregl-popup-content { background-color: #1f2937; color: #f3f4f6; border: 1px solid #374151; }
+[data-theme="dark"] .maplibregl-popup-tip { border-top-color: #1f2937; }
+[data-theme="dark"] .maplibregl-ctrl-group { background-color: #374151; border-color: #4b5563; }
+[data-theme="dark"] .phx-maplibre-popup-label, [data-theme="dark"] .phx-maplibre-popup-title { color: #f3f4f6; }
+[data-theme="dark"] .phx-maplibre-popup-value { color: #d1d5db; }
+[data-theme="dark"] .phx-maplibre-popup-desc, [data-theme="dark"] .maplibregl-popup-close-button { color: #9ca3af; }
+[data-theme="dark"] .phx-maplibre-popup-type { color: #6b7280; }
+[data-theme="dark"] .maplibregl-popup-close-button:hover { color: #f3f4f6; }

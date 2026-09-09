@@ -1,0 +1,39 @@
+{
+  "name": "phx-maplibre-dev",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+  "features": {
+    "ghcr.io/rabdulwahhab/devcontainer-features/erlang-asdf:latest": {
+      "version": "27.3"
+    },
+    "ghcr.io/rabdulwahhab/devcontainer-features/elixir-asdf:latest": {
+      "version": "1.20.1-otp-27"
+    },
+    "ghcr.io/devcontainers/features/node:latest": {
+      "version": "20"
+    },
+    "ghcr.io/schlich/devcontainer-features/playwright:latest": {
+      "browsers": "chromium"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "JakeBecker.elixir-ls",
+        "phoenixframework.phoenix",
+        "ms-playwright.playwright"
+      ]
+    }
+  },
+  "remoteUser": "root",
+  "containerEnv": {
+    "LANG": "C.UTF-8",
+    "LC_ALL": "C.UTF-8",
+    "ASDF_DIR": "/root/.asdf",
+    "ASDF_DATA_DIR": "/root/.asdf"
+  },
+  "forwardPorts": [4001],
+  "postCreateCommand": "bash /workspace/.devcontainer/setup.sh"
+}
