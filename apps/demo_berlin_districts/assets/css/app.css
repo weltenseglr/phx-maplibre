@@ -1,0 +1,321 @@
+/* See the Tailwind configuration guide for advanced usage
+   https://tailwindcss.com/docs/configuration */
+
+@import "tailwindcss" source(none);
+@import "maplibre-gl/dist/maplibre-gl.css";
+@import "../../../phx_maplibre/priv/css/phx_maplibre.css";
+@source "../css";
+@source "../js";
+@source "../../lib";
+
+/* A Tailwind plugin that makes "hero-#{ICON}" classes available.
+   The heroicons installation itself is managed by your mix.exs */
+@plugin "../vendor/heroicons";
+
+/* daisyUI Tailwind Plugin. You can update this file by fetching the latest version with:
+   curl -sLO https://github.com/saadeghi/daisyui/releases/latest/download/daisyui.js
+   Make sure to look at the daisyUI changelog: https://daisyui.com/docs/changelog/ */
+@plugin "../vendor/daisyui" {
+  themes: false;
+}
+
+/* daisyUI theme plugin. You can update this file by fetching the latest version with:
+  curl -sLO https://github.com/saadeghi/daisyui/releases/latest/download/daisyui-theme.js
+  We ship with two themes, a light one inspired on Phoenix colors and a dark one inspired
+  on Elixir colors. Build your own at: https://daisyui.com/theme-generator/ */
+@plugin "../vendor/daisyui-theme" {
+  name: "dark";
+  default: false;
+  prefersdark: true;
+  color-scheme: "dark";
+  --color-base-100: oklch(30.33% 0.016 252.42);
+  --color-base-200: oklch(25.26% 0.014 253.1);
+  --color-base-300: oklch(20.15% 0.012 254.09);
+  --color-base-content: oklch(97.807% 0.029 256.847);
+  --color-primary: oklch(58% 0.233 277.117);
+  --color-primary-content: oklch(96% 0.018 272.314);
+  --color-secondary: oklch(58% 0.233 277.117);
+  --color-secondary-content: oklch(96% 0.018 272.314);
+  --color-accent: oklch(60% 0.25 292.717);
+  --color-accent-content: oklch(96% 0.016 293.756);
+  --color-neutral: oklch(37% 0.044 257.287);
+  --color-neutral-content: oklch(98% 0.003 247.858);
+  --color-info: oklch(58% 0.158 241.966);
+  --color-info-content: oklch(97% 0.013 236.62);
+  --color-success: oklch(60% 0.118 184.704);
+  --color-success-content: oklch(98% 0.014 180.72);
+  --color-warning: oklch(66% 0.179 58.318);
+  --color-warning-content: oklch(98% 0.022 95.277);
+  --color-error: oklch(58% 0.253 17.585);
+  --color-error-content: oklch(96% 0.015 12.422);
+  --radius-selector: 0.25rem;
+  --radius-field: 0.25rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.21875rem;
+  --size-field: 0.21875rem;
+  --border: 1.5px;
+  --depth: 1;
+  --noise: 0;
+}
+
+@plugin "../vendor/daisyui-theme" {
+  name: "light";
+  default: true;
+  prefersdark: false;
+  color-scheme: "light";
+  --color-base-100: oklch(98% 0 0);
+  --color-base-200: oklch(96% 0.001 286.375);
+  --color-base-300: oklch(92% 0.004 286.32);
+  --color-base-content: oklch(21% 0.006 285.885);
+  --color-primary: oklch(70% 0.213 47.604);
+  --color-primary-content: oklch(98% 0.016 73.684);
+  --color-secondary: oklch(55% 0.027 264.364);
+  --color-secondary-content: oklch(98% 0.002 247.839);
+  --color-accent: oklch(0% 0 0);
+  --color-accent-content: oklch(100% 0 0);
+  --color-neutral: oklch(44% 0.017 285.786);
+  --color-neutral-content: oklch(98% 0 0);
+  --color-info: oklch(62% 0.214 259.815);
+  --color-info-content: oklch(97% 0.014 254.604);
+  --color-success: oklch(70% 0.14 182.503);
+  --color-success-content: oklch(98% 0.014 180.72);
+  --color-warning: oklch(66% 0.179 58.318);
+  --color-warning-content: oklch(98% 0.022 95.277);
+  --color-error: oklch(58% 0.253 17.585);
+  --color-error-content: oklch(96% 0.015 12.422);
+  --radius-selector: 0.25rem;
+  --radius-field: 0.25rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.21875rem;
+  --size-field: 0.21875rem;
+  --border: 1.5px;
+  --depth: 1;
+  --noise: 0;
+}
+
+/* Add variants based on LiveView classes */
+@custom-variant phx-click-loading (.phx-click-loading&, .phx-click-loading &);
+@custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);
+@custom-variant phx-change-loading (.phx-change-loading&, .phx-change-loading &);
+
+/* Use the data attribute for dark mode  */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/* Make LiveView wrapper divs transparent for layout */
+[data-phx-session], [data-phx-teleported-src] { display: contents }
+
+/* This file is for your main application CSS */
+
+/* ── Map page fluid layout ── */
+
+/* Fills viewport minus the daisyUI navbar (4rem = 64px) */
+.map-main-fluid {
+  padding: 0;
+}
+
+/* Showcase wrapper: column flex, fills the fluid main */
+.map-showcase {
+  display: flex;
+  flex-direction: column;
+  padding: 1rem 1.5rem;
+  gap: 0.75rem;
+}
+
+.map-showcase-header {
+  flex-shrink: 0;
+}
+
+.map-showcase-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  padding-top: 0.25rem;
+}
+
+/* Three-column flex row of map cards */
+.map-grid {
+  display: flex;
+  flex-direction: row;
+  gap: 1rem;
+}
+
+/* Individual map card — flex column, equal width */
+.map-card {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  border-radius: var(--radius-box, 0.5rem);
+  border: 1px solid var(--color-base-300);
+  overflow: hidden;
+  background: var(--color-base-100);
+}
+
+.map-card-header {
+  flex-shrink: 0;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--color-base-300);
+}
+
+/* CRITICAL: flex: 1 + min-height: 0 lets the map (h-full w-full) fill this */
+.map-card-body {
+  aspect-ratio: 4 / 3;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── Explore page: fixed 2/3 map (left) + 1/3 list (right) ── */
+
+/* Viewport-height flex row under the 4rem navbar. Fixed flex bases keep the
+   map box stable: list content changing size must never move the map. */
+.map-page {
+  display: flex;
+  flex-direction: row;
+  height: calc(100dvh - 4rem);
+  min-height: 0;
+}
+
+.map-container-wrapper {
+  position: relative;
+  flex: 2 1 0;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.map-sidebar {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  border-left: 1px solid var(--color-base-300);
+  background: var(--color-base-100);
+}
+
+.map-sidebar-header {
+  flex-shrink: 0;
+  padding: 1rem 1.25rem 0.75rem;
+  border-bottom: 1px solid var(--color-base-300);
+}
+
+/* The list owns its scrollbar; the page never scrolls. */
+.map-card-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Explore's list items reuse the .map-card name of the landing-page showcase
+   cards; scope the list-item look under .map-page so the two don't fight. */
+.map-page .map-card {
+  flex: 0 0 auto;
+  display: block;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--color-base-300);
+  border-radius: var(--radius-box, 0.5rem);
+  background: var(--color-base-100);
+  cursor: pointer;
+  overflow: visible;
+}
+
+.map-page .map-card:hover {
+  border-color: var(--color-primary);
+}
+
+.map-page .map-card--selected {
+  border-color: var(--color-primary);
+  background: var(--color-base-200);
+}
+
+.map-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+  background: var(--color-base-200);
+}
+
+.map-card-icon--venue {
+  color: var(--color-primary);
+}
+
+.map-card-icon--poi {
+  color: var(--color-info);
+}
+
+/* Overlays live on the map box, so they never reflow the layout either. */
+.map-detail-panel {
+  position: absolute;
+  left: 1rem;
+  bottom: 1rem;
+  z-index: 10;
+  width: min(22rem, calc(100% - 2rem));
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--color-base-300);
+  border-radius: var(--radius-box, 0.5rem);
+  background: var(--color-base-100);
+  box-shadow: 0 10px 25px rgb(0 0 0 / 0.15);
+}
+
+.map-recenter-btn {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 2.5rem;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  border: 1px solid var(--color-base-300);
+  background: var(--color-base-100);
+  cursor: pointer;
+}
+
+.map-geo-fallback {
+  position: absolute;
+  top: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 9999px;
+  border: 1px solid var(--color-warning);
+  background: var(--color-base-100);
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+/* Narrow screens: stack, map on top. */
+@media (max-width: 48rem) {
+  .map-page {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .map-container-wrapper {
+    flex: none;
+    height: 60dvh;
+  }
+
+  .map-sidebar {
+    flex: none;
+    height: auto;
+    max-height: 40dvh;
+    border-left: none;
+    border-top: 1px solid var(--color-base-300);
+  }
+}

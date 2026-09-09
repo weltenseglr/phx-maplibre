@@ -1,0 +1,60 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "demo: phx.server",
+      "type": "shell",
+      "command": "mix phx.server",
+      "options": {
+        "cwd": "${workspaceFolder}/apps/demo_berlin_districts"
+      },
+      "isBackground": true,
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "demo: iex",
+      "type": "shell",
+      "command": "iex -S mix phx.server",
+      "options": {
+        "cwd": "${workspaceFolder}/apps/demo_berlin_districts"
+      },
+      "isBackground": true,
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "demo GSD: iex",
+      "type": "shell",
+      "command": "iex -S mix phx.server",
+      "options": {
+        "cwd": "${workspaceFolder}/apps/demo_gsd_tracker"
+      },
+      "isBackground": true,
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "demo: playwright all tests",
+      "type": "shell",
+      "command": "npx playwright test --reporter=line",
+      "options": {
+        "cwd": "${workspaceFolder}/apps/demo_berlin_districts"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

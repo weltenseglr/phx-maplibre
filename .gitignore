@@ -1,0 +1,68 @@
+# Compiled build artifacts.
+/_build/
+apps/*/_build/
+
+# Test coverage output.
+/cover/
+apps/*/cover/
+
+# Downloaded dependency sources.
+/deps/
+apps/*/deps/
+
+# Generated ExDoc output.
+/doc/
+apps/*/doc/
+
+# mix deps.get bookkeeping.
+/.fetch
+
+# BEAM crash dumps and archive artifacts.
+erl_crash.dump
+apps/**/erl_crash.dump
+*.ez
+
+# Hex package tarballs.
+phx_maplibre-*.tar
+
+# Built and digested assets.
+apps/*/priv/static/assets/
+apps/*/priv/static/cache_manifest.json
+apps/*/priv/static/**/*.gz
+apps/*/priv/static/**/*-[0-9a-f][0-9a-f][0-9a-f][0-9a-f]*
+
+# Node.js dependencies and logs (trailing-slash patterns miss symlinks,
+# so both forms are needed).
+node_modules/
+apps/*/node_modules
+apps/*/assets/node_modules
+*_node_modules
+npm-debug.log
+
+# Playwright output.
+test-results/
+playwright-report/
+
+# Large geodata seed artifacts (kept locally for reseeding, not versioned).
+apps/*/priv/data/filtered.pbf
+apps/*/priv/data/land_covers.dump
+
+# Debug scripts and screenshots.
+apps/demo_berlin_districts/check_*.js
+apps/demo_berlin_districts/map_*.png
+
+# Editor and language-server state.
+.elixir_ls/
+apps/*/.elixir_ls/
+.DS_Store
+
+# Local agent tooling state.
+.omo/
+.sisyphus/
+.codegraph
+.tmp/
+.claude/settings.local.json
+
+# Local environment files.
+.env
+.env.*
