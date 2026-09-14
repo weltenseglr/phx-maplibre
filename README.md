@@ -31,6 +31,20 @@ copy-ready setup and API reference.
 
 The easiest way of getting started is to use the devcontainer setup, which ships with PostgreSQL+PostGIS and the OSM/GDAL tools (`osmium`, `ogr2ogr`, and `pg_dump`) used to generate the GSD Tracker's land-cover dataset. Geodata is intentionally not shipped in Git; bootstrap the GSD demo fixture as described in its README. From there it's the usual loop, from the umbrella root:
 
+Enable the repository's full pre-commit verification hook once per checkout:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+It runs formatting, ExUnit, JavaScript unit tests, asset builds, and both
+Playwright suites through the devcontainer. To run the same check without
+creating a commit:
+
+```bash
+npx --yes @devcontainers/cli exec --workspace-folder . bash /workspace/scripts/verify
+```
+
 ```sh
 mix deps.get
 mix compile

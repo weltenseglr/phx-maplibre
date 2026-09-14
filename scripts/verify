@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# Full local verification, intentionally aligned with the CI test coverage.
+set -euo pipefail
+
+verify_root="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$verify_root"
+
+server_pid=""
+verify_tmp="$(mktemp -d)"
+
+cleanup() {
+  if [[ -n "$server_pid" ]]; then
+    kill "$server_pid" 2>/dev/null || true
+    wait "$server_pid" 2>/dev/null || true
+  fi
+
+  rm -rf "$verify_tmp"
+}
+
+trap cleanup EXIT
+
+mix format --check-formatted
+
+(
+  cd apps/demo_gsd_tracker
+  MIX_ENV=test mix ecto.create
+  MIX_ENV=test mix ecto.migrate
+)
+MIX_ENV=test mix test
+node --test apps/phx_maplibre/test/js/
+
+npm ci --prefix apps/demo_berlin_districts
+npm ci --prefix apps/demo_berlin_districts/assets
+npm ci --prefix apps/demo_gsd_tracker
+npm ci --prefix apps/demo_gsd_tracker/assets
+
+(
+  cd apps/demo_gsd_tracker
+  MIX_ENV=dev mix ecto.create
+  MIX_ENV=dev mix ecto.migrate
+)
+MIX_ENV=dev mix gsd_tracker.fetch_land_cover
+
+(
+  cd apps/demo_berlin_districts
+  mix tailwind.install --if-missing
+  mix esbuild.install --if-missing
+  mix assets.build
+)
+
+(
+  cd apps/demo_gsd_tracker
+  mix tailwind.install --if-missing
+  mix esbuild.install --if-missing
+  mix assets.build
+)
+
+MIX_ENV=dev mix phx.server > "$verify_tmp/phx-server.log" 2>&1 &
+server_pid="$!"
+
+for port in 4001 4002; do
+  for attempt in $(seq 1 60); do
+    if curl -sSf -o /dev/null "http://127.0.0.1:${port}/"; then
+      break
+    fi
+
+    if [[ "$attempt" -eq 60 ]]; then
+      cat "$verify_tmp/phx-server.log" >&2
+      exit 1
+    fi
+
+    sleep 2
+  done
+done
+
+(
+  cd apps/demo_berlin_districts
+  npx playwright test --reporter=line
+)
+
+(
+  cd apps/demo_gsd_tracker
+  npx playwright test --reporter=line
+)
