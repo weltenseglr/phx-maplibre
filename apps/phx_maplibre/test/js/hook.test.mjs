@@ -5,7 +5,7 @@ import {parseConfig} from "../../priv/js/hook.js"
 import {pushMapEvent} from "../../priv/js/events.js"
 import {buildPopupHTML} from "../../priv/js/popup.js"
 import {emptyFeatureCollection} from "../../priv/js/sources_layers.js"
-import {createMapHook} from "../../priv/js/phx_maplibre.js"
+import {createMapHook, getMapHandle} from "../../priv/js/phx_maplibre.js"
 import {installGlobals, uninstallGlobals, createFakeMaplibre, createCtx, mountHook, mountAndLoad} from "./helpers.mjs"
 
 const point = (id, lng, lat, properties = {}) => ({
@@ -646,12 +646,12 @@ describe("browser readiness contract", () => {
   it("distinguishes style initialization, initial load, data and destruction", () => {
     const {ctx, hook} = mountHook()
     assert.equal(ctx.el.dataset.mapHookReady, "true")
-    assert.equal(ctx.el.phxMaplibre.map, ctx.map)
+    assert.equal(getMapHandle(ctx.el).map, ctx.map)
     assert.equal(ctx.el.dataset.mapStyleReady, "false")
     assert.equal(ctx.el.dataset.mapLoaded, "false")
     ctx.command("set_features", {geojson: featureCollection(point("a", 1, 2))})
-    assert.equal(ctx.el.dataset.mapDataReady, "true")
-    assert.equal(ctx.el.phxMaplibre.pointsData, ctx.pointsData)
+    assert.equal(ctx.el.dataset.mapPointsPresent, "true")
+    assert.equal(getMapHandle(ctx.el).pointsData, ctx.pointsData)
     ctx.map._fire("style.load")
     assert.equal(ctx.el.dataset.mapStyleReady, "true")
     assert.equal(ctx.el.dataset.mapLoaded, "false")
@@ -659,10 +659,10 @@ describe("browser readiness contract", () => {
     ctx.map._fire("load")
     assert.equal(ctx.el.dataset.mapLoaded, "true")
     ctx.command("set_features", {geojson: emptyFeatureCollection()})
-    assert.equal(ctx.el.dataset.mapDataReady, "false")
+    assert.equal(ctx.el.dataset.mapPointsPresent, "false")
     hook.destroyed.call(ctx)
-    assert.equal(ctx.el.phxMaplibre, undefined)
-    for (const key of ["mapHookReady", "mapStyleReady", "mapLoaded", "mapDataReady"]) {
+    assert.equal(getMapHandle(ctx.el), null)
+    for (const key of ["mapHookReady", "mapStyleReady", "mapLoaded", "mapPointsPresent"]) {
       assert.equal(ctx.el.dataset[key], "false")
     }
   })
@@ -685,6 +685,95 @@ describe("browser readiness contract", () => {
     assert.equal(ctx.el.dataset.mapStyleReady, "false")
     ctx.map._fire("style.load")
     assert.equal(ctx.el.dataset.mapStyleReady, "true")
+    hook.destroyed.call(ctx)
+  })
+})
+
+
+describe("public browser API and lifecycle diagnostics", () => {
+  beforeEach(() => installGlobals())
+  afterEach(() => uninstallGlobals())
+
+  it("returns null for absent or unmounted elements and freezes mounted handles", () => {
+    assert.equal(getMapHandle(null), null)
+    assert.equal(getMapHandle(createCtx().el), null)
+    const {ctx, hook} = mountHook()
+    const handle = getMapHandle(ctx.el)
+    assert.ok(Object.isFrozen(handle))
+    assert.throws(() => { handle.map = {} }, TypeError)
+    assert.equal(ctx.el.dataset.mapLifecycle, "mounted")
+    hook.destroyed.call(ctx)
+    assert.equal(getMapHandle(ctx.el), null)
+    assert.equal(ctx.el.dataset.mapLifecycle, "destroyed")
+    hook.mounted.call(ctx)
+    assert.notEqual(getMapHandle(ctx.el), handle)
+    assert.notEqual(getMapHandle(ctx.el).map, handle.map)
+    assert.equal(ctx.el.dataset.mapMountCount, "2")
+    assert.equal(ctx.el.dataset.mapPointsPresent, "false")
+    assert.equal(ctx.el.dataset.mapError, "")
+    hook.destroyed.call(ctx)
+  })
+
+  it("records constructor failure without advertising a usable handle", (t) => {
+    t.mock.method(console, "error", () => {})
+    const maplibregl = createFakeMaplibre()
+    const OriginalMap = maplibregl.Map
+    let fail = true
+    maplibregl.Map = class extends OriginalMap {
+      constructor(options) {
+        if (fail) throw new Error("Failed to initialize WebGL")
+        super(options)
+      }
+    }
+    const {ctx, hook} = mountHook({maplibregl})
+    assert.equal(ctx.el.dataset.mapLifecycle, "error")
+    assert.equal(ctx.el.dataset.mapError, "Failed to initialize WebGL")
+    assert.equal(ctx.el.dataset.mapHookReady, "false")
+    assert.equal(getMapHandle(ctx.el), null)
+    assert.equal(console.error.mock.calls.length, 1)
+    hook.destroyed.call(ctx)
+    assert.equal(ctx.el.dataset.mapLifecycle, "destroyed")
+    fail = false
+    hook.mounted.call(ctx)
+    assert.equal(ctx.el.dataset.mapLifecycle, "mounted")
+    assert.equal(ctx.el.dataset.mapMountCount, "2")
+    assert.equal(ctx.el.dataset.mapError, "")
+    assert.ok(getMapHandle(ctx.el))
+    hook.destroyed.call(ctx)
+  })
+
+  it("preserves setup diagnostics even if cleanup also fails", (t) => {
+    t.mock.method(console, "error", () => {})
+    const maplibregl = createFakeMaplibre()
+    const OriginalMap = maplibregl.Map
+    maplibregl.Map = class extends OriginalMap {
+      addControl() { throw new Error("Control setup failed") }
+      remove() { throw new Error("Cleanup failed") }
+    }
+    const {ctx} = mountHook({maplibregl})
+    assert.equal(ctx.el.dataset.mapLifecycle, "error")
+    assert.equal(ctx.el.dataset.mapError, "Control setup failed")
+    assert.equal(ctx.el.dataset.mapHookReady, "false")
+    assert.equal(ctx.map, null)
+    assert.equal(getMapHandle(ctx.el), null)
+    assert.equal(console.error.mock.calls.length, 2)
+  })
+
+  it("records asynchronous layer setup failure and MapLibre resource errors", (t) => {
+    t.mock.method(console, "error", () => {})
+    const {ctx, hook} = mountHook()
+    ctx.map._fire("error", {error: new Error("Style request failed")})
+    assert.equal(ctx.el.dataset.mapError, "Style request failed")
+    assert.equal(ctx.el.dataset.mapStyleReady, "false")
+    ctx.map.addLayer = () => { throw new Error("Layer setup failed") }
+    ctx.map._fire("style.load")
+    assert.equal(ctx.el.dataset.mapLifecycle, "error")
+    assert.equal(ctx.el.dataset.mapError, "Layer setup failed")
+    ctx.map._fire("load")
+    assert.equal(ctx.el.dataset.mapLifecycle, "error")
+    assert.equal(ctx.el.dataset.mapLoaded, "false")
+    assert.equal(ctx.el.dataset.mapHookReady, "true")
+    assert.equal(ctx.el.dataset.mapStyleReady, "false")
     hook.destroyed.call(ctx)
   })
 })

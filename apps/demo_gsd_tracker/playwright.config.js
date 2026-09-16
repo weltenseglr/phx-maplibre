@@ -3,6 +3,17 @@ const { defineConfig, devices } = require('@playwright/test');
 
 const port = process.env.GSD_PORT || '4002';
 const baseURL = `http://127.0.0.1:${port}`;
+// Config is also loaded in workers, whose argv does not contain CLI flags.
+// Propagate the headed choice so worker launches keep the requested display.
+if (process.argv.includes('--headed') || process.env.PWDEBUG) {
+  process.env.GSD_PLAYWRIGHT_HEADED = '1';
+}
+const browserEnv = { ...process.env };
+// ANGLE may try the forwarded X display even in headless mode. The container
+// cannot authenticate to that display; headless rendering needs no X server.
+if (process.env.GSD_PLAYWRIGHT_HEADED !== '1') {
+  delete browserEnv.DISPLAY;
+}
 
 module.exports = defineConfig({
   testDir: './tests',
@@ -14,7 +25,7 @@ module.exports = defineConfig({
   use: {
     baseURL,
     trace: 'on-first-retry',
-    launchOptions: { args: ['--enable-unsafe-swiftshader'] },
+    launchOptions: { args: ['--enable-unsafe-swiftshader'], env: browserEnv },
   },
   projects: [
     {

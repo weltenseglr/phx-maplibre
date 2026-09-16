@@ -7,6 +7,23 @@ const MAP_ID_PREFIX = 'map-tracker-';
 const MAP = `[id^="${MAP_ID_PREFIX}"]`;
 const CANVAS = `${MAP} canvas`;
 
+// Include lifecycle/error diagnostics in readiness failures rather than waiting
+// blindly for a boolean. Initialization errors fail immediately.
+async function waitForMapState(page, attribute, timeout = 15000) {
+  await expect.poll(async () => {
+    const state = await page.locator(MAP).evaluate((element, attribute) => ({
+      ready: element.getAttribute(attribute),
+      lifecycle: element.dataset.mapLifecycle,
+      mountCount: element.dataset.mapMountCount,
+      error: element.dataset.mapError,
+    }), attribute);
+    if (state.lifecycle === 'error') {
+      throw new Error(`Map initialization failed: ${JSON.stringify(state)}`);
+    }
+    return state.ready === 'true' ? 'ready' : JSON.stringify(state);
+  }, {timeout, message: `Waiting for ${attribute}`}).toBe('ready');
+}
+
 test.describe('GSD Tracker Map', () => {
   test('map canvas is visible', async ({ page }) => {
     await page.goto('/');
@@ -28,7 +45,7 @@ test.describe('GSD Tracker Map', () => {
     await expect(page.locator(CANVAS).first()).toBeVisible({ timeout: 10000 });
 
     await expect(page.locator("#gsd-connection-status")).toHaveAttribute("data-connection", "live");
-    await expect(page.locator(MAP)).toHaveAttribute("data-map-hook-ready", "true");
+    await waitForMapState(page, "data-map-hook-ready");
     const tracker = page.locator("#gsd-tracker");
     const revision = await tracker.getAttribute("data-simulation-revision");
     await expect(tracker).not.toHaveAttribute("data-simulation-revision", revision, { timeout: 15000 });
@@ -49,18 +66,17 @@ test.describe('GSD Tracker Map', () => {
       timeout: 15000,
     });
 
-    const map = page.locator(MAP);
-    await expect(map).toHaveAttribute('data-map-hook-ready', 'true', { timeout: 15000 });
-    await expect(map).toHaveAttribute('data-map-style-ready', 'true', { timeout: 15000 });
-    await expect(map).toHaveAttribute('data-map-data-ready', 'true', { timeout: 60000 });
+    await waitForMapState(page, 'data-map-hook-ready');
+    await waitForMapState(page, 'data-map-style-ready');
+    await waitForMapState(page, 'data-map-points-present', 60000);
 
     // Zoom past clustering, centered on a real position supplied by the server.
     const gsdCoordinates = await page.evaluate((selector) =>
-      document.querySelector(selector).phxMaplibre.pointsData.features[0].geometry.coordinates,
+      window.phxMaplibre.getMapHandle(document.querySelector(selector)).pointsData.features[0].geometry.coordinates,
       MAP);
 
     await page.evaluate(({selector, coordinates}) => {
-      const hook = document.querySelector(selector).phxMaplibre;
+      const hook = window.phxMaplibre.getMapHandle(document.querySelector(selector));
       hook.map.jumpTo({ center: coordinates, zoom: 15 });
     }, {selector: MAP, coordinates: gsdCoordinates});
 
@@ -76,7 +92,7 @@ test.describe('GSD Tracker Map', () => {
       .poll(
         () =>
           page.evaluate(({selector, candidates}) => {
-            const hook = document.querySelector(selector).phxMaplibre;
+            const hook = window.phxMaplibre.getMapHandle(document.querySelector(selector));
             if (!hook?.map) return 0;
             const layers = candidates.filter((id) => hook.map.getLayer(id));
             if (!layers.length) return 0;
@@ -93,7 +109,7 @@ test.describe('GSD Tracker Map', () => {
     // position (relative to the map container, which is what map.project
     // uses and what the canvas fills) and click there.
     const point = await page.evaluate(({selector, candidates}) => {
-      const hook = document.querySelector(selector).phxMaplibre;
+      const hook = window.phxMaplibre.getMapHandle(document.querySelector(selector));
       const layers = candidates.filter((id) => hook.map.getLayer(id));
       const feature = hook.map.queryRenderedFeatures({ layers })[0];
       const projected = hook.map.project(feature.geometry.coordinates);

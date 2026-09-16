@@ -1,5 +1,6 @@
 import {createHook, parseConfig} from "./hook.js"
 export {parseConfig}
+export {getMapHandle} from "./browser.js"
 
 /**
  * Build the PhxMaplibre LiveView hook around your own MapLibre GL import.

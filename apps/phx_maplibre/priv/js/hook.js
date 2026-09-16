@@ -1,3 +1,4 @@
+import {registerMapHandle, unregisterMapHandle} from "./browser.js"
 import {pushMapEvent, viewportPayload} from "./events.js"
 import {addLayers, addSources, emptyFeatureCollection} from "./sources_layers.js"
 import {observeTheme, onStyleLoad, preferredStyle} from "./theme.js"
@@ -107,7 +108,7 @@ function registerCommands(hook) {
   command("set_features", ({geojson} = {}) => {
     collapseSpider(hook)
     hook.pointsData = geojson || emptyFeatureCollection()
-    hook.el.dataset.mapDataReady = String(hook.pointsData.features?.length > 0)
+    hook.el.dataset.mapPointsPresent = String(hook.pointsData.features?.length > 0)
     updateAnimatedFeatures(hook)
 
     if (hook.animActive) {
@@ -152,6 +153,7 @@ function registerCommands(hook) {
     hook.currentStyle = style
     hook.styleReloading = true
     hook.el.dataset.mapStyleReady = "false"
+    hook.el.dataset.mapLifecycle = "style-loading"
     // The popup is anchored to a layer the new style arrives without, so it
     // would hang around pointing at nothing. Same as the theme swap does.
     if (hook.popup) {
@@ -163,6 +165,27 @@ function registerCommands(hook) {
   })
 
   command("request_geolocation", () => hook.geolocate?.trigger())
+}
+
+function recordError(hook, error, fatal = false) {
+  const message = error?.message || String(error)
+  hook.el.dataset.mapError = message
+  if (fatal) {
+    hook.el.dataset.mapLifecycle = "error"
+    hook.el.dataset.mapStyleReady = "false"
+  }
+  console.error(`PhxMaplibre ${hook.mapId}: ${message}`)
+}
+
+function cleanup(hook) {
+  unregisterMapHandle(hook.el)
+  stopAnimateLoop(hook)
+  clearTimeout(hook.themeTimer)
+  hook.themeObserver?.disconnect()
+  if (hook.popup) hook.popup.remove()
+  const map = hook.map
+  hook.map = null
+  map?.remove()
 }
 
 /**
@@ -189,100 +212,120 @@ export function createHook(maplibregl, options = {}) {
 
   return {
     mounted() {
-      this.maplibregl = maplibregl
-      this.popupContent = popupContent
-      this.now = now
-      this.raf = raf
-      this.caf = caf
-      this.mapId = this.el.id
-      this.el.dataset.mapHookReady = "false"
-      this.el.dataset.mapStyleReady = "false"
-      this.el.dataset.mapLoaded = "false"
-      this.el.dataset.mapDataReady = "false"
-      this.config = parseConfig(this.el)
-      this.pointsData = emptyFeatureCollection()
-      this.areasData = emptyFeatureCollection()
-      this.hoveredAreaId = null
-      this.selectedAreaId = null
-      this.hoveredPointId = null
-      this.hoveredSpiderPointId = null
-      this.selectedPointId = null
-      this.selectedPointIdLinkedId = null
-      this.hoveredClusterId = null
-      this.spiderFeatures = new Map()
-      this.spiderExpanded = false
-      this.spiderRequestId = 0
-      this.spiderClickHandled = false
-      this.lastMoveEnd = 0
-      this.ready = false
-      this.styleReloading = false
-      this.currentStyle = preferredStyle(this.config)
-      initAnimateState(this)
+      this.el.dataset.mapLifecycle = "mounting"
+      this.el.dataset.mapError = ""
+      this.el.dataset.mapMountCount = String(Number(this.el.dataset.mapMountCount || 0) + 1)
+      try {
+        this.maplibregl = maplibregl
+        this.popupContent = popupContent
+        this.now = now
+        this.raf = raf
+        this.caf = caf
+        this.mapId = this.el.id
+        this.el.dataset.mapHookReady = "false"
+        this.el.dataset.mapStyleReady = "false"
+        this.el.dataset.mapLoaded = "false"
+        this.el.dataset.mapPointsPresent = "false"
+        this.config = parseConfig(this.el)
+        this.pointsData = emptyFeatureCollection()
+        this.areasData = emptyFeatureCollection()
+        this.hoveredAreaId = null
+        this.selectedAreaId = null
+        this.hoveredPointId = null
+        this.hoveredSpiderPointId = null
+        this.selectedPointId = null
+        this.selectedPointIdLinkedId = null
+        this.hoveredClusterId = null
+        this.spiderFeatures = new Map()
+        this.spiderExpanded = false
+        this.spiderRequestId = 0
+        this.spiderClickHandled = false
+        this.lastMoveEnd = 0
+        this.ready = false
+        this.styleReloading = false
+        this.currentStyle = preferredStyle(this.config)
+        initAnimateState(this)
 
-      const clusterSpiderfy = typeof this.config.clusterSpiderfyZoom === "number"
+        const clusterSpiderfy = typeof this.config.clusterSpiderfyZoom === "number"
 
-      this.map = new maplibregl.Map({
-        container: this.el,
-        style: this.currentStyle,
-        center: [this.config.center.lng, this.config.center.lat],
-        zoom: this.config.zoom,
-        attributionControl: true,
-        hash: false,
-      })
+        this.map = new maplibregl.Map({
+          container: this.el,
+          style: this.currentStyle,
+          center: [this.config.center.lng, this.config.center.lat],
+          zoom: this.config.zoom,
+          attributionControl: true,
+          hash: false,
+        })
 
-      addControls(this, maplibregl)
+        addControls(this, maplibregl)
 
-      this.map.on("style.load", () => {
-        if (!this.ready) initializeStyle()
-        else if (this.styleReloading) onStyleLoad(this)
-      })
+        this.map.on("error", (event) => {
+          if (this.map) recordError(this, event.error || event)
+        })
+        this.map.on("style.load", () => {
+          if (!this.map) return
+          try {
+            if (!this.ready) initializeStyle()
+            else if (this.styleReloading) onStyleLoad(this)
+            this.el.dataset.mapLifecycle = "mounted"
+          } catch (error) {
+            recordError(this, error, true)
+          }
+        })
 
-      const initializeStyle = () => {
-        if (this.ready) return
-        addSources(this.map, this.config.cluster, this.config.clusterSpiderfyZoom)
-        addLayers(this.map, this.config.cluster, this.config.clusterColor, clusterSpiderfy)
-        // Commands can arrive between mount and the initial style load;
-        // apply whatever data they stored so it isn't lost.
-        this.map.getSource("points")?.setData(this.pointsData)
-        this.map.getSource("areas")?.setData(this.areasData)
-        bindInteractions(this)
-        this.ready = true
-        // Features buffered before the initial style load snap into place on
-        // the animated source too (nothing meaningful to tween from yet).
-        updateAnimatedFeatures(this, {tween: false})
-        this.el.dataset.mapStyleReady = "true"
+        const initializeStyle = () => {
+          if (this.ready) return
+          addSources(this.map, this.config.cluster, this.config.clusterSpiderfyZoom)
+          addLayers(this.map, this.config.cluster, this.config.clusterColor, clusterSpiderfy)
+          // Commands can arrive between mount and the initial style load;
+          // apply whatever data they stored so it isn't lost.
+          this.map.getSource("points")?.setData(this.pointsData)
+          this.map.getSource("areas")?.setData(this.areasData)
+          bindInteractions(this)
+          this.ready = true
+          // Features buffered before the initial style load snap into place on
+          // the animated source too (nothing meaningful to tween from yet).
+          updateAnimatedFeatures(this, {tween: false})
+          this.el.dataset.mapStyleReady = "true"
+        }
+
+        this.map.on("load", () => {
+          if (!this.map || this.el.dataset.mapLifecycle === "error") return
+          try {
+            initializeStyle()
+            this.el.dataset.mapLoaded = "true"
+            this.el.dataset.mapLifecycle = "mounted"
+            pushMapEvent(this, "ready", viewportPayload(this.map))
+          } catch (error) {
+            recordError(this, error, true)
+          }
+        })
+
+        this.map.on("zoomstart", () => collapseSpider(this))
+        this.map.on("zoomend", () => updateAnimateMode(this))
+
+        observeTheme(this)
+        registerCommands(this)
+        registerMapHandle(this)
+        this.el.dataset.mapHookReady = "true"
+        this.el.dataset.mapLifecycle = "mounted"
+      } catch (error) {
+        try {
+          cleanup(this)
+        } catch (cleanupError) {
+          console.error(`PhxMaplibre ${this.mapId}: cleanup failed`, cleanupError)
+        }
+        this.el.dataset.mapHookReady = "false"
+        recordError(this, error, true)
       }
-
-      this.map.on("load", () => {
-        initializeStyle()
-        this.el.dataset.mapLoaded = "true"
-        pushMapEvent(this, "ready", viewportPayload(this.map))
-      })
-
-      this.map.on("zoomstart", () => collapseSpider(this))
-      this.map.on("zoomend", () => updateAnimateMode(this))
-
-      observeTheme(this)
-      registerCommands(this)
-      const hook = this
-      this.el.phxMaplibre = Object.freeze({
-        map: this.map,
-        get pointsData() { return hook.pointsData },
-      })
-      this.el.dataset.mapHookReady = "true"
     },
 
     destroyed() {
-      delete this.el.phxMaplibre
-      for (const state of ["mapHookReady", "mapStyleReady", "mapLoaded", "mapDataReady"]) {
+      this.el.dataset.mapLifecycle = "destroyed"
+      for (const state of ["mapHookReady", "mapStyleReady", "mapLoaded", "mapPointsPresent"]) {
         this.el.dataset[state] = "false"
       }
-      stopAnimateLoop(this)
-      clearTimeout(this.themeTimer)
-      this.themeObserver?.disconnect()
-      if (this.popup) this.popup.remove()
-      this.map?.remove()
-      this.map = null
+      cleanup(this)
     },
   }
 }

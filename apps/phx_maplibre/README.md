@@ -103,20 +103,45 @@ Readiness has several independent meanings. Use the narrowest signal needed:
 | Hook mounted | `data-map-hook-ready="true"` | Map instance and command handlers exist. |
 | Style initialized | `data-map-style-ready="true"` | Custom sources, layers, and interactions exist. Resets during theme or `set_style` replacement. |
 | Initial map load | `data-map-loaded="true"` | Initial MapLibre `load` event occurred; this milestone remains true across style replacements. |
-| Point data present | `data-map-data-ready="true"` | Latest `set_features` collection is nonempty; becomes false for an empty collection. |
+| Points present | `data-map-points-present="true"` | Latest `set_features` collection is nonempty; becomes false for an empty collection. |
 | Actionable pin | `queryRenderedFeatures` on the intended pin layers | A pin is currently rendered in the viewport. |
 
 The four map attributes start as `"false"` and reset on hook destruction.
 Style readiness alone does not guarantee that asynchronous source processing
 has rendered a feature. Area-only maps need their own data condition:
-`data-map-data-ready` describes points only. The server `:ready` event still
+`data-map-points-present` describes points only. The server `:ready` event still
 fires at initial map load and is a useful cue for the first data push.
 
-The mounted container exposes `element.phxMaplibre`: a frozen interface with
-`map` (the MapLibre instance) and a `pointsData` getter reflecting the latest
-collection. Treat the collection as read-only. The interface is removed on
-destruction; reacquire it after navigation. There is no need to inspect
+Import `getMapHandle` from `phx_maplibre` and pass the container element. It
+returns `null` before successful mount and after destruction, or a frozen
+handle with `map` (the MapLibre instance) and a `pointsData` getter reflecting the latest
+collection. Treat the collection as read-only. Reacquire the handle after
+navigation or remount. A previously saved handle still refers to the old,
+removed map; it must not be reused. There is no need to inspect
 private `window.liveSocket` objects.
+
+Initialization diagnostics are separate from readiness. `data-map-lifecycle`
+is `mounting`, `mounted`, `style-loading`, `error`, or `destroyed`.
+`data-map-mount-count` increments on each mount of the same element.
+`data-map-error` holds the latest setup or MapLibre resource error message and
+resets on remount. Setup exceptions leave the relevant readiness flags false,
+record `error`, clean up a failed mount, and log the original message to the
+console without interrupting other LiveView hooks. Resource errors can be
+recoverable, so they record a message without automatically marking a mounted
+map unusable. Connectivity remains independent of map setup success.
+
+For browser tests, explicitly expose the exported accessor in the app bundle:
+
+```js
+import {getMapHandle} from "phx_maplibre";
+window.phxMaplibre = Object.freeze({getMapHandle});
+```
+
+In a failing test, include `mapLifecycle`, `mapMountCount`, and `mapError` from
+the container's `dataset` in the readiness assertion. An `error` lifecycle
+should fail immediately with the original error; a mounting or style-loading
+state can be polled with a bounded timeout. The GSD suite demonstrates this in
+its `waitForMapState` helper.
 
 For a canvas visibility test, checking the canvas is sufficient:
 
@@ -134,22 +159,22 @@ const selector = "#tracker-map";
 const container = page.locator(selector);
 await expect(container).toHaveAttribute("data-map-hook-ready", "true");
 await expect(container).toHaveAttribute("data-map-style-ready", "true");
-await expect(container).toHaveAttribute("data-map-data-ready", "true");
+await expect(container).toHaveAttribute("data-map-points-present", "true");
 
 await page.evaluate((selector) => {
-  const {map, pointsData} = document.querySelector(selector).phxMaplibre;
+  const {map, pointsData} = window.phxMaplibre.getMapHandle(document.querySelector(selector));
   map.jumpTo({center: pointsData.features[0].geometry.coordinates, zoom: 15});
 }, selector);
 
 const layers = ["unclustered-points", "animated-points"];
 await expect.poll(() => page.evaluate(({selector, layers}) => {
-  const {map} = document.querySelector(selector).phxMaplibre;
+  const {map} = window.phxMaplibre.getMapHandle(document.querySelector(selector));
   const existing = layers.filter(id => map.getLayer(id));
   return existing.length ? map.queryRenderedFeatures({layers: existing}).length : 0;
 }, {selector, layers})).toBeGreaterThan(0);
 
 const pixel = await page.evaluate(({selector, layers}) => {
-  const {map} = document.querySelector(selector).phxMaplibre;
+  const {map} = window.phxMaplibre.getMapHandle(document.querySelector(selector));
   const feature = map.queryRenderedFeatures({
     layers: layers.filter(id => map.getLayer(id)),
   })[0];

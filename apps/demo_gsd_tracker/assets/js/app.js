@@ -2,7 +2,7 @@ import "phoenix_html"
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import maplibregl from "maplibre-gl"
-import {createMapHook} from "phx_maplibre"
+import {createMapHook, getMapHandle} from "phx_maplibre"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']")?.getAttribute("content")
 
@@ -27,3 +27,6 @@ const liveSocket = new LiveSocket("/live", Socket, {
 liveSocket.connect()
 
 window.liveSocket = liveSocket
+
+// Documented library API exposed for the demo browser tests and developer console.
+window.phxMaplibre = Object.freeze({getMapHandle})

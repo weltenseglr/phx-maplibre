@@ -94,9 +94,11 @@ simulation broadcast is handled. Tests can wait for a revision change instead
 of sleeping for an assumed simulation interval.
 
 Map readiness is separate: `data-map-hook-ready`, `data-map-style-ready`,
-`data-map-loaded` (initial load milestone), and `data-map-data-ready` (nonempty
-point collection). The map container's `phxMaplibre` interface exposes `map`
-and the current `pointsData` getter. See the [library examples](../phx_maplibre/README.md#browser-readiness-and-playwright)
+`data-map-loaded` (initial load milestone), and `data-map-points-present` (nonempty
+point collection). The library's exported `getMapHandle(element)` returns a
+frozen handle with `map` and the current `pointsData` getter, or `null` before
+mounting and after destruction. The demo exposes this accessor as
+`window.phxMaplibre.getMapHandle` for its browser tests. See the [library examples](../phx_maplibre/README.md#browser-readiness-and-playwright)
 for polling rendered pins and selecting one through a real mouse click.
 
 Run from this app directory:
@@ -116,7 +118,13 @@ The pin test waits for initial position data because a fresh server builds its
 fleet asynchronously. It then zooms to a real position and waits for a rendered
 pin; receiving GeoJSON alone does not imply rendering has finished.
 
-If headless Chromium cannot initialize WebGL in your environment, run with a
+Headless test launches clear the inherited `DISPLAY` value, since a forwarded
+IDE display can be inaccessible inside the devcontainer and prevent ANGLE from
+initializing WebGL. Headed/debug launches preserve the display. Map setup
+failures report `data-map-lifecycle`, `data-map-mount-count`, and `data-map-error`
+in readiness assertions instead of timing out on an unexplained false flag.
+
+For interactive inspection, run with a
 virtual display on Linux:
 
 ```bash

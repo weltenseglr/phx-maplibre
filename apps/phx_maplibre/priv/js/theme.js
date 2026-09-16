@@ -83,6 +83,7 @@ export function observeTheme(hook) {
       hook.currentStyle = style
       hook.styleReloading = true
       hook.el.dataset.mapStyleReady = "false"
+      hook.el.dataset.mapLifecycle = "style-loading"
       if (hook.popup) {
         hook.popup.remove()
         hook.popup = null

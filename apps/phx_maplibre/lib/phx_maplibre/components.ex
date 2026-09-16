@@ -30,14 +30,19 @@ defmodule PhxMaplibre.Components do
       interactions exist. It resets during command/theme style replacement.
     * `data-map-loaded` records the initial MapLibre `load` event. It is a
       milestone, not the continuously changing `map.loaded()` predicate.
-    * `data-map-data-ready` reflects whether the latest point collection is
+    * `data-map-points-present` reflects whether the latest point collection is
       nonempty; it does not imply that a feature has rendered.
 
+  `data-map-lifecycle` distinguishes `mounting`, `mounted`, `style-loading`,
+  `error`, and `destroyed`; `data-map-mount-count` counts mounts of this element,
+  and `data-map-error` records the latest setup/resource error (reset on remount).
+  Setup exceptions record diagnostics and are logged without breaking LiveView.
+
   All flags reset on destruction. On a mounted container,
-  `element.phxMaplibre` exposes the MapLibre `map` and a read-only `pointsData`
-  getter for developer tooling and browser tests. This interface is removed on
-  destruction. Treat the returned feature collection as read-only. Wait for
-  style readiness before querying layers, then poll `queryRenderedFeatures`
+  the exported `getMapHandle(element)` returns a frozen handle exposing the
+  MapLibre `map` and a read-only `pointsData` getter. It returns `null` before
+  successful mounting and after destruction. Reacquire after remount. Treat the
+  returned feature collection as read-only. Wait for style readiness before querying layers, then poll `queryRenderedFeatures`
   for the specific actionable layer needed by the test. LiveView connectivity
   and application update receipt are separate application states.
 
