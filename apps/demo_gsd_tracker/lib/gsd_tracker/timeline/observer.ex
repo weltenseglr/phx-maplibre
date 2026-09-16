@@ -35,7 +35,6 @@ defmodule GsdTracker.Timeline.Observer do
 
   @horizon_s 1800
   @horizon_min_s 600
-  @replenish_max_batch 25
   @bootstrap_delay_ms 1_000
   @bootstrap_task_name :gsd_timeline_bootstrap_task
 
@@ -416,9 +415,11 @@ defmodule GsdTracker.Timeline.Observer do
         %{state | respawn_at: now_s + (min_ms + u * (max_ms - min_ms)) / 1000.0}
 
       now_s >= state.respawn_at ->
-        u = Rng.roll(state.world_seed, {:replenish_batch, state.tick})
-        batch = 1 + trunc(u * min(deficit, @replenish_max_batch))
-        replenish(batch, state, now_s, now_dt, env)
+        # Replace the whole observed deficit. A fixed-size batch imposes a
+        # replacement-rate ceiling while departures scale with fleet size,
+        # causing the population to settle far below the configured target.
+        # The randomized delay still allows natural short-term fluctuations.
+        replenish(deficit, state, now_s, now_dt, env)
         %{state | respawn_at: nil}
 
       true ->

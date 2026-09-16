@@ -120,12 +120,17 @@ defmodule GsdTracker.Timeline.ObserverTest do
 
   test "replenishment tops a depleted world back up" do
     previous_count = Application.get_env(:demo_gsd_tracker, :gsd_count)
-    Application.put_env(:demo_gsd_tracker, :gsd_count, 10)
+    previous_delay = Application.fetch_env(:demo_gsd_tracker, :replenish_delay_ms)
+    Application.put_env(:demo_gsd_tracker, :gsd_count, 100)
     Application.put_env(:demo_gsd_tracker, :replenish_delay_ms, {0, 0})
 
     on_exit(fn ->
       Application.put_env(:demo_gsd_tracker, :gsd_count, previous_count)
-      Application.delete_env(:demo_gsd_tracker, :replenish_delay_ms)
+
+      case previous_delay do
+        {:ok, delay} -> Application.put_env(:demo_gsd_tracker, :replenish_delay_ms, delay)
+        :error -> Application.delete_env(:demo_gsd_tracker, :replenish_delay_ms)
+      end
     end)
 
     bootstrap!(4, 3)
@@ -140,8 +145,26 @@ defmodule GsdTracker.Timeline.ObserverTest do
     _ = :sys.get_state(observer)
     await_persist_idle()
 
-    assert stats.total > 4
+    assert stats.total == 100
     assert db_count!("gsds") == stats.total
+
+    # Staying at the target must not introduce additional units.
+    send(observer, :tick)
+    assert_receive {:update, %{stats: %{total: 100}}}, 5_000
+    _ = :sys.get_state(observer)
+    await_persist_idle()
+    assert db_count!("gsds") == 100
+
+    # A subsequent depletion must also recover, rather than accumulating
+    # a deficit across replenishment cycles.
+    bootstrap!(30, 4)
+    send(observer, :tick)
+    assert_receive {:update, %{stats: %{total: 30}}}, 5_000
+    send(observer, :tick)
+    assert_receive {:update, %{stats: %{total: 100}}}, 5_000
+    _ = :sys.get_state(observer)
+    await_persist_idle()
+    assert db_count!("gsds") == 100
   end
 
   test "flock effects maintain the persisted member_count" do
