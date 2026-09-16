@@ -88,11 +88,10 @@ test.describe('GSD Tracker Map', () => {
     const canvas = page.locator(CANVAS).first();
     await expect(canvas).toBeVisible({ timeout: 10000 });
 
-    // Wait for the phx_maplibre hook to mount and finish its initial map load.
     await page.waitForFunction(
       () => {
         const hook = window.__findMapHook && window.__findMapHook();
-        return Boolean(hook?.map && typeof hook.map.loaded === 'function' && hook.map.loaded());
+        return Boolean(hook?.map && hook.pointsData?.features?.length);
       },
       { timeout: 15000 }
     );

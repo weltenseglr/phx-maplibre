@@ -18,3 +18,9 @@ mix local.rebar --force
 cd /workspace/apps/demo_berlin_districts
 mix setup
 npm install
+
+cd /workspace/apps/demo_gsd_tracker
+MIX_ENV=dev mix ecto.create
+MIX_ENV=dev mix ecto.migrate
+MIX_ENV=test mix ecto.create
+MIX_ENV=test mix ecto.migrate
