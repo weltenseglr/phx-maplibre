@@ -60,6 +60,10 @@ defmodule PhxMaplibre.Components do
 
   attr :cluster, :boolean, default: true, doc: "cluster point features"
 
+  attr :cluster_spiderfy_zoom, :any,
+    default: nil,
+    doc: "zoom at/above which cluster clicks spiderfy instead of zooming; nil disables"
+
   attr :cluster_color, :string,
     default: nil,
     doc:
@@ -138,6 +142,12 @@ defmodule PhxMaplibre.Components do
       other -> bad!(:animate_min_zoom, other, "a number, or false to disable")
     end
 
+    case assigns.cluster_spiderfy_zoom do
+      value when is_number(value) -> :ok
+      disabled when disabled in [false, nil] -> :ok
+      other -> bad!(:cluster_spiderfy_zoom, other, "a number, or nil to disable")
+    end
+
     :ok
   end
 
@@ -153,6 +163,7 @@ defmodule PhxMaplibre.Components do
       lightStyle: assigns.light_style,
       darkStyle: assigns.dark_style,
       cluster: assigns.cluster,
+      clusterSpiderfyZoom: assigns.cluster_spiderfy_zoom || false,
       clusterColor: assigns.cluster_color,
       # nil and false both mean "disabled"; false is the canonical wire value.
       animateMinZoom: assigns.animate_min_zoom || false,

@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.2.0 (2026-09-16)
+
+Cluster spiderfying.
+
+- Added the optional `cluster_spiderfy_zoom` component attribute. Below the
+  configured zoom, a cluster click zooms no farther than the threshold; at or
+  above it, the cluster expands into individually selectable points with
+  leader lines.
+- Clustering remains active throughout MapLibre's normal map zoom range when
+  cluster spiderfying is configured. Animated point presentation is disabled
+  in this mode so one source owns the visible point state.
+- Spiderfied selections preserve the original GeoJSON feature, including its
+  stable id, coordinates, and properties.
+- Expansion now hides only the selected native cluster and restores it on
+  zoom, source updates, style changes, or a background click. Stale
+  `getClusterLeaves` responses are ignored after the interaction is canceled.
+- Fixed cluster clicks jumping directly to maximum zoom when their calculated
+  expansion zoom exceeded the spiderfy threshold.
+
 ## 0.1.0 (2026-09-10)
 
 Animated position transitions.

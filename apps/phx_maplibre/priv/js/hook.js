@@ -4,6 +4,7 @@ import {observeTheme, onStyleLoad, preferredStyle} from "./theme.js"
 import {bindInteractions} from "./interactions.js"
 import {clearPopupTracking, refreshPopup} from "./popup.js"
 import {initAnimateState, stopAnimateLoop, updateAnimateMode, updateAnimatedFeatures} from "./animate.js"
+import {collapseSpider} from "./spiderfy.js"
 
 const LIGHT = "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
 const DARK = "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
@@ -14,6 +15,7 @@ const defaults = {
   lightStyle: LIGHT,
   darkStyle: DARK,
   cluster: true,
+  clusterSpiderfyZoom: null,
   navigation: true,
   geolocation: false,
   flyOnGeolocate: true,
@@ -46,6 +48,12 @@ export function parseConfig(el) {
     lightStyle: typeof raw.lightStyle === "string" ? raw.lightStyle : defaults.lightStyle,
     darkStyle: typeof raw.darkStyle === "string" ? raw.darkStyle : defaults.darkStyle,
     cluster: typeof raw.cluster === "boolean" ? raw.cluster : defaults.cluster,
+    clusterSpiderfyZoom:
+      raw.clusterSpiderfyZoom === false || raw.clusterSpiderfyZoom === null
+        ? null
+        : Number.isFinite(Number(raw.clusterSpiderfyZoom))
+          ? Number(raw.clusterSpiderfyZoom)
+          : defaults.clusterSpiderfyZoom,
     clusterColor: typeof raw.clusterColor === "string" ? raw.clusterColor : null,
     navigation: typeof raw.navigation === "boolean" ? raw.navigation : defaults.navigation,
     geolocation: raw.geolocation === true,
@@ -97,6 +105,7 @@ function registerCommands(hook) {
   const command = (name, handler) => hook.handleEvent(`maplibre:${hook.mapId}:${name}`, handler)
 
   command("set_features", ({geojson} = {}) => {
+    collapseSpider(hook)
     hook.pointsData = geojson || emptyFeatureCollection()
     updateAnimatedFeatures(hook)
 
@@ -190,14 +199,21 @@ export function createHook(maplibregl, options = {}) {
       this.hoveredAreaId = null
       this.selectedAreaId = null
       this.hoveredPointId = null
+      this.hoveredSpiderPointId = null
       this.selectedPointId = null
       this.selectedPointIdLinkedId = null
       this.hoveredClusterId = null
+      this.spiderFeatures = new Map()
+      this.spiderExpanded = false
+      this.spiderRequestId = 0
+      this.spiderClickHandled = false
       this.lastMoveEnd = 0
       this.ready = false
       this.styleReloading = false
       this.currentStyle = preferredStyle(this.config)
       initAnimateState(this)
+
+      const clusterSpiderfy = typeof this.config.clusterSpiderfyZoom === "number"
 
       this.map = new maplibregl.Map({
         container: this.el,
@@ -211,8 +227,8 @@ export function createHook(maplibregl, options = {}) {
       addControls(this, maplibregl)
 
       this.map.on("load", () => {
-        addSources(this.map, this.config.cluster)
-        addLayers(this.map, this.config.cluster, this.config.clusterColor)
+        addSources(this.map, this.config.cluster, this.config.clusterSpiderfyZoom)
+        addLayers(this.map, this.config.cluster, this.config.clusterColor, clusterSpiderfy)
         // Commands can arrive between mount and the initial style load;
         // apply whatever data they stored so it isn't lost.
         this.map.getSource("points")?.setData(this.pointsData)
@@ -225,6 +241,7 @@ export function createHook(maplibregl, options = {}) {
         pushMapEvent(this, "ready", viewportPayload(this.map))
       })
 
+      this.map.on("zoomstart", () => collapseSpider(this))
       this.map.on("zoomend", () => updateAnimateMode(this))
 
       this.map.on("style.load", () => {

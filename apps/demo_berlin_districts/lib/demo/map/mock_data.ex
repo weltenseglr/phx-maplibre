@@ -34,6 +34,14 @@ defmodule Demo.Map.MockData do
     {"Gold's Gym Neukoelln", "Neukoelln", 13.4410, 52.4840, "venue", "gym"}
   ]
 
+  # Separate entities sharing one building entrance, used to exercise cluster
+  # spiderfying without relying on random jitter.
+  @overlapping_venues [
+    {"Shared Entrance Yoga", "Mitte", 13.4050, 52.5200, "venue", "yoga"},
+    {"Shared Entrance Pilates", "Mitte", 13.4050, 52.5200, "venue", "pilates"},
+    {"Shared Entrance Boxing", "Mitte", 13.4050, 52.5200, "venue", "boxing"}
+  ]
+
   # Service area polygons
   @areas [
     %{
@@ -75,14 +83,15 @@ defmodule Demo.Map.MockData do
   ]
 
   @doc """
-  Return all venues as domain entities, plus 8 jittered duplicates per
-  venue to exercise clustering (180 points total).
+  Return all venues as domain entities, plus 8 jittered duplicates per base
+  venue and 3 exact-coordinate fixtures (183 points total).
   """
   def all_venues do
     # Base venues + jittered duplicates for density
     base = Enum.map(@venues, &venue_entity/1)
     jittered = generate_jittered(base, 8)
-    base ++ jittered
+    overlapping = Enum.map(@overlapping_venues, &venue_entity/1)
+    base ++ jittered ++ overlapping
   end
 
   @doc "Return all POIs as domain entities."
@@ -211,8 +220,8 @@ defmodule Demo.Map.MockData do
   defp generate_jittered(base, count) do
     Enum.flat_map(base, fn entity ->
       Enum.map(1..count, fn i ->
-        offset_lng = Enum.random(-300..300) / 10_000
-        offset_lat = Enum.random(-300..300) / 10_000
+        offset_lng = jitter_offset(entity.id, i, :lng)
+        offset_lat = jitter_offset(entity.id, i, :lat)
 
         %{
           entity
@@ -223,6 +232,10 @@ defmodule Demo.Map.MockData do
         }
       end)
     end)
+  end
+
+  defp jitter_offset(id, index, axis) do
+    (:erlang.phash2({id, index, axis}, 601) - 300) / 10_000
   end
 
   defp area_in_bounds?(area, north, east, south, west) do

@@ -1,5 +1,6 @@
 import {pushMapEvent, viewportPayload} from "./events.js"
 import {clearPopupTracking, showPopup} from "./popup.js"
+import {collapseSpider, expandClusterSpider, originalSpiderFeature} from "./spiderfy.js"
 
 /**
  * GeoJSON is the exchange format: the payload carries the feature exactly as
@@ -128,9 +129,24 @@ function bindClusterInteractions(hook) {
     if (!feature) return
 
     const id = feature.properties.cluster_id
+    hook.spiderClickHandled = true
+    queueMicrotask(() => { hook.spiderClickHandled = false })
+
     try {
-      const zoom = await map.getSource("points").getClusterExpansionZoom(id)
-      map.easeTo({center: feature.geometry.coordinates, zoom})
+      const source = map.getSource("points")
+      const spiderfyZoom = hook.config.clusterSpiderfyZoom
+      if (typeof spiderfyZoom === "number" && map.getZoom() >= spiderfyZoom) {
+        const requestId = ++hook.spiderRequestId
+        const leaves = await source.getClusterLeaves(id, feature.properties.point_count, 0)
+        if (requestId !== hook.spiderRequestId) return
+        expandClusterSpider(hook, feature, leaves)
+      } else {
+        const expansionZoom = await source.getClusterExpansionZoom(id)
+        const zoom = typeof spiderfyZoom === "number"
+          ? Math.min(expansionZoom, spiderfyZoom)
+          : expansionZoom
+        map.easeTo({center: feature.geometry.coordinates, zoom})
+      }
       pushMapEvent(hook, "cluster_selected", {
         cluster_id: id,
         point_count: feature.properties.point_count,
@@ -178,6 +194,22 @@ export function bindInteractions(hook) {
   })
   bindHoverTransitions(hook, "animated-points", POINT_SOURCES, "point", "hoveredPointId")
 
+  if (typeof hook.config.clusterSpiderfyZoom === "number" && map.getLayer("spider-points")) {
+    map.on("click", "spider-points", (event) => {
+      if (hook.styleReloading) return
+      const displayed = event.features?.[0]
+      if (!displayed) return
+      hook.spiderClickHandled = true
+      queueMicrotask(() => { hook.spiderClickHandled = false })
+      const feature = originalSpiderFeature(hook, displayed)
+
+      showPopup(hook, event.lngLat, feature, "point")
+      select(hook, POINT_SOURCES, "point", "selectedPointId", feature)
+      pushMapEvent(hook, "feature_selected", featurePayload(feature, "point"))
+    })
+    bindHoverTransitions(hook, "spider-points", "spider", "point", "hoveredSpiderPointId")
+  }
+
   map.on("click", "area-fill", (event) => {
     if (hook.styleReloading) return
     const feature = event.features?.[0]
@@ -208,12 +240,22 @@ export function bindInteractions(hook) {
   })
 
   map.on("click", (event) => {
+    if (hook.spiderClickHandled) {
+      hook.spiderClickHandled = false
+      return
+    }
     const interactive = map.queryRenderedFeatures(event.point, {
-      layers: ["unclustered-points", "area-fill", "clusters", "animated-points"].filter((id) =>
+      layers: ["unclustered-points", "area-fill", "clusters", "animated-points", "spider-points"].filter((id) =>
         map.getLayer(id),
       ),
     })
-    if (hook.styleReloading || interactive.length) return
+    if (hook.styleReloading) return
+
+    const keepsSpiderOpen = interactive.some(({layer}) =>
+      layer?.id === "clusters" || layer?.id === "spider-points"
+    )
+    if (hook.spiderExpanded && !keepsSpiderOpen) collapseSpider(hook)
+    if (interactive.length) return
 
     deselect(hook, POINT_SOURCES, "point", "selectedPointId")
     deselect(hook, "areas", "area", "selectedAreaId")

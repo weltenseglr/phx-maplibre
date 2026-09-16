@@ -213,6 +213,7 @@ defmodule DemoWeb.ExploreLive do
             center={@center}
             zoom={@zoom}
             cluster={true}
+            cluster_spiderfy_zoom={15}
             geolocation={true}
             navigation={true}
             events={@events}

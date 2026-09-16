@@ -258,6 +258,7 @@ survives.
 | `dark_style` | `:string` | Carto Dark Matter style URL | style used when `<html data-theme="dark">`, or when there is no `data-theme` and the OS prefers dark |
 | `cluster` | `:boolean` | `true` | cluster point features (MapLibre GL clustering on the `points` source) |
 | `cluster_color` | `:string` | `nil` | single color for cluster bubbles, with dark count text; unset keeps the built-in size-stepped palette |
+| `cluster_spiderfy_zoom` | `:any` | `nil` | keep clusters through the map's zoom range; below this zoom cluster clicks zoom no farther than the threshold, while clicks at/above it spiderfy that cluster's leaves; this mode supersedes animated point presentation |
 | `animate_min_zoom` | `:any` | `12` | zoom at/above which point features render with animated position transitions between `set_features` updates (see [Animated updates](#animated-updates)); `false` (or `nil`) disables animation |
 | `navigation` | `:boolean` | `true` | show the `NavigationControl` (zoom/rotate) |
 | `geolocation` | `:boolean` | `false` | show the `GeolocateControl` |
@@ -266,6 +267,23 @@ survives.
 | `move_end_throttle_ms` | `:integer` | `1000` | minimum interval between `:move_end` events |
 | `class` | `:any` | `nil` | extra classes merged onto the `phx-maplibre` container class |
 | `rest` | `:global` | — | passed through to the container `div` |
+
+Spiderfying changes presentation only. Expanded points remain linked to their
+original GeoJSON features, so selection events carry the original coordinates
+and properties. Zooming or clicking empty map space restores the cluster.
+
+```heex
+<PhxMaplibre.Components.map
+  id="venues-map"
+  cluster={true}
+  cluster_spiderfy_zoom={15}
+/>
+```
+
+The threshold is also the upper bound for normal cluster-click zooming. If
+MapLibre calculates an expansion zoom of `18`, clicking at zoom `14` stops at
+`15`; the next click spiderfies the cluster without moving the camera. While
+expanded, only that cluster is hidden. Other clusters remain interactive.
 
 The whitelist is enforced client-side: `pushMapEvent` in `priv/js/events.js`
 checks membership before calling `pushEvent`, so an event you leave out never
@@ -305,7 +323,7 @@ about become atoms; unrecognized keys and everything inside `:properties`
 | `:feature_deselected` | a selected feature is replaced by a new selection *of the same kind*, an already-selected area is clicked again (toggle off), or a click lands on empty map space (fires once per kind — point and/or area — that was selected) | `%{id: id, kind: "point" \| "area"}` |
 | `:feature_hovered` | the pointer enters a point or area feature — opt-in, not in the default `events` list | `%{id: id, kind: "point" \| "area", title: title \| nil}` |
 | `:feature_unhovered` | the pointer leaves a feature, or moves directly onto another feature (fires for the old feature before `:feature_hovered` fires for the new one) — opt-in | `%{id: id, kind: "point" \| "area", title: title \| nil}` |
-| `:cluster_selected` | a cluster circle is clicked (only when `cluster={true}`); the map also eases to the cluster's expansion zoom | `%{cluster_id: id, point_count: n, center: %{lng:, lat:}}` |
+| `:cluster_selected` | a cluster circle is clicked (only when `cluster={true}`); below `cluster_spiderfy_zoom` the map eases no farther than that threshold, and at/above it the cluster spiderfies without moving the camera | `%{cluster_id: id, point_count: n, center: %{lng:, lat:}}` |
 | `:move_end` | the map stops moving (pan/zoom/fly), throttled to at most one per `move_end_throttle_ms` | `%{bounds: %{west:, south:, east:, north:}, center: %{lng:, lat:}, zoom: zoom}` |
 | `:geolocation_success` | the browser's `GeolocateControl` resolves a position | `%{lng: lng, lat: lat, accuracy: accuracy}` |
 | `:geolocation_error` | the browser denies or fails geolocation | `%{code: code, message: message}` |

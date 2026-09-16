@@ -49,7 +49,8 @@ export function initAnimateState(hook) {
   hook.animOverCap = false
 }
 
-const animationConfigured = (hook) => typeof hook.config.animateMinZoom === "number"
+const animationConfigured = (hook) =>
+  typeof hook.config.animateMinZoom === "number" && hook.config.clusterSpiderfyZoom === null
 
 /**
  * Fold a `set_features` payload into the tween table. Existing features tween

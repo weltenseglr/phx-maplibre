@@ -47,6 +47,14 @@ describe("parseConfig", () => {
     assert.strictEqual(config.clusterColor, null)
   })
 
+  it("accepts a cluster spiderfy zoom while leaving it disabled by default", () => {
+    assert.strictEqual(parseConfig({dataset: {config: "{}"}}).clusterSpiderfyZoom, null)
+    assert.strictEqual(
+      parseConfig({dataset: {config: JSON.stringify({clusterSpiderfyZoom: 15})}}).clusterSpiderfyZoom,
+      15,
+    )
+  })
+
   it("falls back to defaults on malformed JSON", () => {
     const el = {dataset: {config: "{not valid json"}}
 
@@ -185,6 +193,105 @@ describe("hook integration", () => {
 
     ctx.command("set_area_features", {})
     assert.deepStrictEqual(ctx.map.getSource("areas").getData(), emptyFeatureCollection())
+  })
+
+  it("caps cluster zoom at the threshold, then spiderfies until an empty click", async () => {
+    const {ctx} = mountAndLoad({
+      config: {clusterSpiderfyZoom: 15, events: ["cluster_selected", "feature_selected"]},
+    })
+    const source = ctx.map.getSource("points")
+    source.clusterExpansionZoom = 24
+    source.clusterLeaves = [
+      point("a", 13.4, 52.5, {id: "a", title: "First"}),
+      point("b", 13.4, 52.5, {id: "b", title: "Second"}),
+    ]
+    const cluster = {
+      type: "Feature",
+      id: 0,
+      geometry: {type: "Point", coordinates: [13.4, 52.5]},
+      properties: {cluster_id: 7, point_count: 2},
+    }
+
+    assert.strictEqual(source.def.clusterMaxZoom, 23)
+    assert.strictEqual(source.def.maxzoom, 24)
+    assert.strictEqual(ctx.map.getSource("overlap-stacks"), undefined)
+
+    ctx.map._setZoom(14)
+    ctx.map._fireLayer("click", "clusters", {features: [cluster]})
+    ctx.map._fire("click", {point: {x: 1340, y: 5250}})
+    await Promise.resolve()
+    assert.strictEqual(ctx.map.easeToCalls.length, 1)
+    assert.strictEqual(ctx.map.easeToCalls[0].zoom, 15)
+    assert.strictEqual(ctx.map.getSource("spider").getData().features.length, 0)
+
+    ctx.map._setZoom(15)
+    ctx.map._fireLayer("click", "clusters", {features: [cluster]})
+    ctx.map._fire("click", {point: {x: 1340, y: 5250}})
+    await Promise.resolve()
+    await Promise.resolve()
+
+    assert.strictEqual(ctx.map.easeToCalls.length, 1)
+    assert.strictEqual(ctx.spiderExpanded, true)
+    assert.strictEqual(ctx.map.getSource("spider").getData().features.length, 4)
+    assert.ok(ctx.map.filterCalls.some(({layerId, filter}) =>
+      layerId === "clusters" && JSON.stringify(filter).includes('"cluster_id"'),
+    ))
+
+    const displayedSecond = ctx.map.getSource("spider").getData().features.find((feature) =>
+      feature.geometry.type === "Point" && feature.id === "b"
+    )
+    ctx.map._fireLayer("click", "spider-points", {
+      features: [displayedSecond],
+      lngLat: {lng: displayedSecond.geometry.coordinates[0], lat: displayedSecond.geometry.coordinates[1]},
+    })
+    ctx.map._fire("click", {point: {x: 1340, y: 5250}})
+    const selected = ctx.pushedEvents.find(({payload}) => payload?.event === "feature_selected")
+    assert.strictEqual(selected.payload.payload.id, "b")
+    assert.deepStrictEqual(selected.payload.payload.feature.geometry.coordinates, [13.4, 52.5])
+    assert.strictEqual(ctx.spiderExpanded, true)
+
+    ctx.map._fire("click", {point: {x: 0, y: 0}})
+    assert.strictEqual(ctx.spiderExpanded, false)
+    assert.strictEqual(ctx.map.getSource("spider").getData().features.length, 0)
+    assert.deepStrictEqual(ctx.map.filterCalls.at(-1), {
+      layerId: "cluster-count",
+      filter: ["has", "point_count"],
+    })
+  })
+
+  it("ignores cluster leaves that arrive after zooming away", async () => {
+    const {ctx} = mountAndLoad({config: {clusterSpiderfyZoom: 15}})
+    const source = ctx.map.getSource("points")
+    let resolveLeaves
+    source.getClusterLeaves = () => new Promise((resolve) => { resolveLeaves = resolve })
+    const cluster = {
+      type: "Feature",
+      geometry: {type: "Point", coordinates: [13.4, 52.5]},
+      properties: {cluster_id: 7, point_count: 2},
+    }
+
+    ctx.map._setZoom(15)
+    ctx.map._fireLayer("click", "clusters", {features: [cluster]})
+    ctx.map._fire("zoomstart", {})
+    resolveLeaves([
+      point("a", 13.4, 52.5, {id: "a"}),
+      point("b", 13.4, 52.5, {id: "b"}),
+    ])
+    await Promise.resolve()
+    await Promise.resolve()
+
+    assert.strictEqual(ctx.spiderExpanded, false)
+    assert.strictEqual(ctx.map.getSource("spider").getData().features.length, 0)
+    assert.deepStrictEqual(ctx.map.filterCalls.at(-1), {
+      layerId: "cluster-count",
+      filter: ["has", "point_count"],
+    })
+  })
+
+  it("does not add spider sources or layers without a cluster spiderfy threshold", () => {
+    const {ctx} = mountAndLoad()
+    assert.strictEqual(ctx.map.getSource("spider"), undefined)
+    assert.strictEqual(ctx.map.getLayer("spider-points"), undefined)
   })
 
   it("set_style sets styleReloading and calls map.setStyle with diff:true; style.load restores state", () => {

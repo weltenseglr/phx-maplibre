@@ -1,6 +1,7 @@
 import {addLayers, addSources} from "./sources_layers.js"
 import {clearPopupTracking} from "./popup.js"
 import {updateAnimatedFeatures} from "./animate.js"
+import {collapseSpider} from "./spiderfy.js"
 
 /** Pick the style URL for the current theme. An explicit `data-theme` beats the OS preference. */
 export function preferredStyle(config) {
@@ -50,14 +51,16 @@ export function restoreFeatureStates(hook, states) {
  */
 export function onStyleLoad(hook) {
   const states = captureFeatureStates(hook)
-  addSources(hook.map, hook.config.cluster)
-  addLayers(hook.map, hook.config.cluster, hook.config.clusterColor)
+  const clusterSpiderfy = typeof hook.config.clusterSpiderfyZoom === "number"
+  addSources(hook.map, hook.config.cluster, hook.config.clusterSpiderfyZoom)
+  addLayers(hook.map, hook.config.cluster, hook.config.clusterColor, clusterSpiderfy)
   hook.map.getSource("points")?.setData(hook.pointsData)
   hook.pointsDirty = false
   hook.map.getSource("areas")?.setData(hook.areasData)
   // Rebuild the animated source from the same stashed data; targets are
   // current, so nothing tweens on a style swap.
   updateAnimatedFeatures(hook, {tween: false})
+  collapseSpider(hook)
   restoreFeatureStates(hook, states)
   hook.styleReloading = false
 }

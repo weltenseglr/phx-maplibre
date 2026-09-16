@@ -7,7 +7,8 @@ A [MapLibre GL JS](https://maplibre.org/) integration for Phoenix LiveView.
 * **[gsd-tracker.weltenseglr.de](https://gsd-tracker.weltenseglr.de)** — 24,000
   simulated pigeons a.k.a. "Government Surveillance Drone" over Berlin, live.
 * **[phx-maplibre.demo.weltenseglr.de](https://phx-maplibre.demo.weltenseglr.de)** —
-  Berlin districts and POIs: clustering, hover, geolocation, theming.
+  Berlin districts and POIs: clustering, cluster spiderfying, hover,
+  geolocation, and theming.
 
 ## Apps
 
@@ -15,11 +16,11 @@ A [MapLibre GL JS](https://maplibre.org/) integration for Phoenix LiveView.
 |---|---|
 | [`apps/phx_maplibre`](apps/phx_maplibre) | The library, packaged for Hex (not published yet). Map events go out on per-map PubSub topics; any BEAM process can drive any map by broadcasting commands. Its [README](apps/phx_maplibre/README.md) has the installation steps and the full API. |
 | [`apps/demo_gsd_tracker`](apps/demo_gsd_tracker) | Live tracking of simulated "Government Surveillance Drone" a.k.a. pigeons over Berlin, on Ash 3 + PostGIS with a GenServer simulation, rendered through the library without a single `handle_event` clause. Deployed at [gsd-tracker.weltenseglr.de](https://gsd-tracker.weltenseglr.de). |
-| [`apps/demo_berlin_districts`](apps/demo_berlin_districts) | Berlin districts and POIs: clustering, the hover contract, geolocation, theming. Deployed at [phx-maplibre.demo.weltenseglr.de](https://phx-maplibre.demo.weltenseglr.de). |
+| [`apps/demo_berlin_districts`](apps/demo_berlin_districts) | Berlin districts and POIs: clustering, cluster spiderfying, the hover contract, geolocation, and theming. Deployed at [phx-maplibre.demo.weltenseglr.de](https://phx-maplibre.demo.weltenseglr.de). |
 
 ## Usage
 
-Add `{:phx_maplibre, "~> 0.1"}` to your Phoenix application's dependencies,
+Add `{:phx_maplibre, "~> 0.2"}` to your Phoenix application's dependencies,
 register `createMapHook(maplibregl)` as `PhxMaplibreHook` on its `LiveSocket`,
 then render `PhxMaplibre.Components.map/1` from a LiveView that uses
 `PhxMaplibre.LiveView` and calls `attach_map/3` in `mount/3`. Commands such as

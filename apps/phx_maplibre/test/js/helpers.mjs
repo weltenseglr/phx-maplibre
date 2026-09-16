@@ -110,6 +110,7 @@ export class FakeMap {
     this.easeToCalls = []
     this.setFeatureStateCalls = []
     this.layoutCalls = []
+    this.filterCalls = []
     this._visibility = {}
     this._zoom = 10
     this.removed = false
@@ -147,7 +148,10 @@ export class FakeMap {
         return this.data
       },
       getClusterExpansionZoom(_clusterId) {
-        return Promise.resolve(14)
+        return Promise.resolve(this.clusterExpansionZoom ?? 14)
+      },
+      getClusterLeaves(_clusterId, _limit, _offset) {
+        return Promise.resolve(this.clusterLeaves || [])
       },
     }
   }
@@ -223,6 +227,18 @@ export class FakeMap {
   setLayoutProperty(layerId, name, value) {
     this.layoutCalls.push({layerId, name, value})
     if (name === "visibility") this._visibility[layerId] = value
+  }
+
+  setFilter(layerId, filter) {
+    this.filterCalls.push({layerId, filter})
+  }
+
+  project([lng, lat]) {
+    return {x: lng * 100, y: lat * 100}
+  }
+
+  unproject([x, y]) {
+    return {lng: x / 100, lat: y / 100}
   }
 
   remove() {

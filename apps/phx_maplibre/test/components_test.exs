@@ -34,6 +34,7 @@ defmodule PhxMaplibre.ComponentsTest do
     assert config["center"] == %{"lng" => 13.405, "lat" => 52.52}
     assert config["zoom"] == 11
     assert config["cluster"] == true
+    assert config["clusterSpiderfyZoom"] == false
     assert config["navigation"] == true
     assert config["geolocation"] == false
     assert config["flyOnGeolocate"] == true
@@ -55,6 +56,20 @@ defmodule PhxMaplibre.ComponentsTest do
   test "an invalid animate_min_zoom raises naming the attribute" do
     assert_raise ArgumentError, ~r/animate_min_zoom/, fn ->
       render_map(id: "m1", animate_min_zoom: "twelve")
+    end
+  end
+
+  test "cluster_spiderfy_zoom accepts a number or disabled value" do
+    assert decode_config(render_map(id: "m1", cluster_spiderfy_zoom: 15))["clusterSpiderfyZoom"] ==
+             15
+
+    assert decode_config(render_map(id: "m1", cluster_spiderfy_zoom: nil))["clusterSpiderfyZoom"] ==
+             false
+  end
+
+  test "an invalid cluster_spiderfy_zoom raises naming the attribute" do
+    assert_raise ArgumentError, ~r/cluster_spiderfy_zoom/, fn ->
+      render_map(id: "m1", cluster_spiderfy_zoom: "fifteen")
     end
   end
 
