@@ -3,6 +3,14 @@ set -euo pipefail
 
 repo_root="$(git rev-parse --show-toplevel)"
 
+# Inside a container, or without a usable Docker daemon, use the local tools.
+# Choose the runner before verification: a failed check must still block commit.
+if [[ -f /.dockerenv || -f /run/.containerenv ]] ||
+  ! command -v docker >/dev/null 2>&1 ||
+  ! docker info >/dev/null 2>&1; then
+  exec bash "$repo_root/scripts/verify"
+fi
+
 exec npx --yes @devcontainers/cli exec \
   --workspace-folder "$repo_root" \
   bash /workspace/scripts/verify

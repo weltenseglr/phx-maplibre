@@ -39,12 +39,16 @@ git config core.hooksPath .githooks
 ```
 
 It runs formatting, ExUnit, JavaScript unit tests, asset builds, and both
-Playwright suites through the devcontainer. To run the same check without
-creating a commit:
+Playwright suites through the devcontainer CLI on the host. Inside a container,
+or when Docker is unavailable, it runs `bash scripts/verify` directly using the
+local tools. Verification failures still block the commit. To run the same
+check without creating a commit:
 
 ```bash
 npx --yes @devcontainers/cli exec --workspace-folder . bash /workspace/scripts/verify
 ```
+
+Inside the devcontainer, use `bash scripts/verify`.
 
 ```sh
 mix deps.get
