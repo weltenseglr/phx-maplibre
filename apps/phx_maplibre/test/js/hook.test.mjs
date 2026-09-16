@@ -638,3 +638,53 @@ describe("popup refresh on set_features", () => {
     assert.ok(ctx.popup.html.includes("2"))
   })
 })
+
+describe("browser readiness contract", () => {
+  beforeEach(() => installGlobals())
+  afterEach(() => uninstallGlobals())
+
+  it("distinguishes style initialization, initial load, data and destruction", () => {
+    const {ctx, hook} = mountHook()
+    assert.equal(ctx.el.dataset.mapHookReady, "true")
+    assert.equal(ctx.el.phxMaplibre.map, ctx.map)
+    assert.equal(ctx.el.dataset.mapStyleReady, "false")
+    assert.equal(ctx.el.dataset.mapLoaded, "false")
+    ctx.command("set_features", {geojson: featureCollection(point("a", 1, 2))})
+    assert.equal(ctx.el.dataset.mapDataReady, "true")
+    assert.equal(ctx.el.phxMaplibre.pointsData, ctx.pointsData)
+    ctx.map._fire("style.load")
+    assert.equal(ctx.el.dataset.mapStyleReady, "true")
+    assert.equal(ctx.el.dataset.mapLoaded, "false")
+    assert.ok(ctx.map.getLayer("unclustered-points"))
+    ctx.map._fire("load")
+    assert.equal(ctx.el.dataset.mapLoaded, "true")
+    ctx.command("set_features", {geojson: emptyFeatureCollection()})
+    assert.equal(ctx.el.dataset.mapDataReady, "false")
+    hook.destroyed.call(ctx)
+    assert.equal(ctx.el.phxMaplibre, undefined)
+    for (const key of ["mapHookReady", "mapStyleReady", "mapLoaded", "mapDataReady"]) {
+      assert.equal(ctx.el.dataset[key], "false")
+    }
+  })
+
+  it("invalidates style readiness until replacement layers are restored", () => {
+    const {ctx} = mountAndLoad()
+    ctx.command("set_style", {style: "replacement"})
+    assert.equal(ctx.el.dataset.mapStyleReady, "false")
+    assert.equal(ctx.map.getLayer("unclustered-points"), undefined)
+    ctx.map._fire("style.load")
+    assert.equal(ctx.el.dataset.mapStyleReady, "true")
+    assert.ok(ctx.map.getLayer("unclustered-points"))
+  })
+
+  it("invalidates readiness for theme changes too", async () => {
+    const {ctx, hook} = mountAndLoad()
+    document.documentElement.dataset.theme = "dark"
+    ctx.themeObserver._trigger([{attributeName: "data-theme"}])
+    await new Promise(resolve => setTimeout(resolve, 350))
+    assert.equal(ctx.el.dataset.mapStyleReady, "false")
+    ctx.map._fire("style.load")
+    assert.equal(ctx.el.dataset.mapStyleReady, "true")
+    hook.destroyed.call(ctx)
+  })
+})

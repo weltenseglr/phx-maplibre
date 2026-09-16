@@ -21,6 +21,26 @@ defmodule PhxMaplibre.Components do
   npm package), and a parent LiveView that does `use PhxMaplibre.LiveView` and
   calls `PhxMaplibre.LiveView.attach_map/3` with this same `id`.
 
+  ## Browser readiness
+
+  The hook initializes these DOM attributes to `"false"`:
+
+    * `data-map-hook-ready` becomes `"true"` after the map and command handlers exist.
+    * `data-map-style-ready` becomes `"true"` after custom sources, layers and
+      interactions exist. It resets during command/theme style replacement.
+    * `data-map-loaded` records the initial MapLibre `load` event. It is a
+      milestone, not the continuously changing `map.loaded()` predicate.
+    * `data-map-data-ready` reflects whether the latest point collection is
+      nonempty; it does not imply that a feature has rendered.
+
+  All flags reset on destruction. On a mounted container,
+  `element.phxMaplibre` exposes the MapLibre `map` and a read-only `pointsData`
+  getter for developer tooling and browser tests. This interface is removed on
+  destruction. Treat the returned feature collection as read-only. Wait for
+  style readiness before querying layers, then poll `queryRenderedFeatures`
+  for the specific actionable layer needed by the test. LiveView connectivity
+  and application update receipt are separate application states.
+
   ## Example
 
       <PhxMaplibre.Components.map

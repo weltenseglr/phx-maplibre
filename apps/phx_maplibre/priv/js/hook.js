@@ -107,6 +107,7 @@ function registerCommands(hook) {
   command("set_features", ({geojson} = {}) => {
     collapseSpider(hook)
     hook.pointsData = geojson || emptyFeatureCollection()
+    hook.el.dataset.mapDataReady = String(hook.pointsData.features?.length > 0)
     updateAnimatedFeatures(hook)
 
     if (hook.animActive) {
@@ -150,6 +151,7 @@ function registerCommands(hook) {
     if (typeof style !== "string") return
     hook.currentStyle = style
     hook.styleReloading = true
+    hook.el.dataset.mapStyleReady = "false"
     // The popup is anchored to a layer the new style arrives without, so it
     // would hang around pointing at nothing. Same as the theme swap does.
     if (hook.popup) {
@@ -193,6 +195,10 @@ export function createHook(maplibregl, options = {}) {
       this.raf = raf
       this.caf = caf
       this.mapId = this.el.id
+      this.el.dataset.mapHookReady = "false"
+      this.el.dataset.mapStyleReady = "false"
+      this.el.dataset.mapLoaded = "false"
+      this.el.dataset.mapDataReady = "false"
       this.config = parseConfig(this.el)
       this.pointsData = emptyFeatureCollection()
       this.areasData = emptyFeatureCollection()
@@ -226,7 +232,13 @@ export function createHook(maplibregl, options = {}) {
 
       addControls(this, maplibregl)
 
-      this.map.on("load", () => {
+      this.map.on("style.load", () => {
+        if (!this.ready) initializeStyle()
+        else if (this.styleReloading) onStyleLoad(this)
+      })
+
+      const initializeStyle = () => {
+        if (this.ready) return
         addSources(this.map, this.config.cluster, this.config.clusterSpiderfyZoom)
         addLayers(this.map, this.config.cluster, this.config.clusterColor, clusterSpiderfy)
         // Commands can arrive between mount and the initial style load;
@@ -238,21 +250,33 @@ export function createHook(maplibregl, options = {}) {
         // Features buffered before the initial style load snap into place on
         // the animated source too (nothing meaningful to tween from yet).
         updateAnimatedFeatures(this, {tween: false})
+        this.el.dataset.mapStyleReady = "true"
+      }
+
+      this.map.on("load", () => {
+        initializeStyle()
+        this.el.dataset.mapLoaded = "true"
         pushMapEvent(this, "ready", viewportPayload(this.map))
       })
 
       this.map.on("zoomstart", () => collapseSpider(this))
       this.map.on("zoomend", () => updateAnimateMode(this))
 
-      this.map.on("style.load", () => {
-        if (this.ready && this.styleReloading) onStyleLoad(this)
-      })
-
       observeTheme(this)
       registerCommands(this)
+      const hook = this
+      this.el.phxMaplibre = Object.freeze({
+        map: this.map,
+        get pointsData() { return hook.pointsData },
+      })
+      this.el.dataset.mapHookReady = "true"
     },
 
     destroyed() {
+      delete this.el.phxMaplibre
+      for (const state of ["mapHookReady", "mapStyleReady", "mapLoaded", "mapDataReady"]) {
+        this.el.dataset[state] = "false"
+      }
       stopAnimateLoop(this)
       clearTimeout(this.themeTimer)
       this.themeObserver?.disconnect()

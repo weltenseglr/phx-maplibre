@@ -44,8 +44,8 @@ defmodule GsdTrackerWeb.Layouts do
             class="gsd-connection-status is-offline flex items-center gap-2"
             role="status"
             aria-live="polite"
-            phx-disconnected={JS.add_class("is-offline", to: "#gsd-connection-status")}
-            phx-connected={JS.remove_class("is-offline", to: "#gsd-connection-status")}
+            phx-hook="ConnectionStatus"
+            data-connection="offline"
           >
             <span class="gsd-live-dot inline-block size-2 rounded-full" aria-hidden="true"></span>
             <span class="gsd-status-live text-[10px] font-bold uppercase tracking-[0.2em]">Live</span>

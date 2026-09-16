@@ -83,3 +83,42 @@ space and time.
 
 When synchronizing a checkout, use `rsync -a --filter='merge .rsync-filter'`
 so the generated dump and architecture-specific build output stay local.
+
+## Readiness and browser tests
+
+The connection badge exposes `data-connection="offline"` on the initial HTML
+and `"live"` when its LiveView hook mounts or reconnects. The hook keeps the
+badge consistent across server patches and marks it offline on disconnect.
+`#gsd-tracker[data-simulation-revision]` starts at zero and increments when a
+simulation broadcast is handled. Tests can wait for a revision change instead
+of sleeping for an assumed simulation interval.
+
+Map readiness is separate: `data-map-hook-ready`, `data-map-style-ready`,
+`data-map-loaded` (initial load milestone), and `data-map-data-ready` (nonempty
+point collection). The map container's `phxMaplibre` interface exposes `map`
+and the current `pointsData` getter. See the [library examples](../phx_maplibre/README.md#browser-readiness-and-playwright)
+for polling rendered pins and selecting one through a real mouse click.
+
+Run from this app directory:
+
+```bash
+npx playwright test --reporter=line --workers=1
+npx playwright test --reporter=line --workers=4
+```
+
+For a separate server port, set `GSD_PORT` and `DEMO_PORT` together:
+
+```bash
+GSD_PORT=4102 DEMO_PORT=4101 npx playwright test --reporter=line
+```
+
+The pin test waits for initial position data because a fresh server builds its
+fleet asynchronously. It then zooms to a real position and waits for a rendered
+pin; receiving GeoJSON alone does not imply rendering has finished.
+
+If headless Chromium cannot initialize WebGL in your environment, run with a
+virtual display on Linux:
+
+```bash
+xvfb-run -a npx playwright test --headed --reporter=line
+```

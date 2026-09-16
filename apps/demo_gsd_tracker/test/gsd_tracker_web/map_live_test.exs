@@ -39,8 +39,8 @@ defmodule GsdTrackerWeb.MapLiveTest do
       assert html =~ ~s(id="gsd-connection-status")
       assert html =~ "is-offline"
       assert html =~ "Offline"
-      assert html =~ "phx-connected"
-      assert html =~ "phx-disconnected"
+      assert html =~ ~s(phx-hook="ConnectionStatus")
+      assert html =~ ~s(data-connection="offline")
     end
 
     test "renders simulation stats broadcast on the gsd_updates topic" do
@@ -53,6 +53,7 @@ defmodule GsdTrackerWeb.MapLiveTest do
 
       html = render(view)
 
+      assert html =~ ~s(data-simulation-revision="1")
       assert html =~ "Total Pigeons"
       assert html =~ "100"
       assert html =~ "Couples"

@@ -63,6 +63,7 @@ export function onStyleLoad(hook) {
   collapseSpider(hook)
   restoreFeatureStates(hook, states)
   hook.styleReloading = false
+  hook.el.dataset.mapStyleReady = "true"
 }
 
 /**
@@ -81,6 +82,7 @@ export function observeTheme(hook) {
 
       hook.currentStyle = style
       hook.styleReloading = true
+      hook.el.dataset.mapStyleReady = "false"
       if (hook.popup) {
         hook.popup.remove()
         hook.popup = null

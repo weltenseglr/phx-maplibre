@@ -8,7 +8,20 @@ const csrfToken = document.querySelector("meta[name='csrf-token']")?.getAttribut
 
 const liveSocket = new LiveSocket("/live", Socket, {
   params: {_csrf_token: csrfToken},
-  hooks: {PhxMaplibreHook: createMapHook(maplibregl)}
+  hooks: {
+    PhxMaplibreHook: createMapHook(maplibregl),
+    ConnectionStatus: {
+      mounted() { this.setConnection(true) },
+      reconnected() { this.setConnection(true) },
+      disconnected() { this.setConnection(false) },
+      updated() { this.setConnection(this.connectionLive) },
+      setConnection(live) {
+        this.connectionLive = live
+        this.el.dataset.connection = live ? "live" : "offline"
+        this.el.classList.toggle("is-offline", !live)
+      },
+    },
+  }
 })
 
 liveSocket.connect()

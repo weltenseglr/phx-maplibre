@@ -93,6 +93,122 @@ const liveSocket = new LiveSocket("/live", Socket, {
 exactly the name `PhxMaplibreHook`; that is what
 `PhxMaplibre.Components.map/1` puts in `phx-hook`.
 
+### Browser readiness and Playwright
+
+Readiness has several independent meanings. Use the narrowest signal needed:
+
+| State | Signal | Meaning |
+| --- | --- | --- |
+| LiveView connected | Application connection indicator or hook `mounted` / `reconnected` / `disconnected` callbacks | The channel is live; this does not imply style or data readiness. |
+| Hook mounted | `data-map-hook-ready="true"` | Map instance and command handlers exist. |
+| Style initialized | `data-map-style-ready="true"` | Custom sources, layers, and interactions exist. Resets during theme or `set_style` replacement. |
+| Initial map load | `data-map-loaded="true"` | Initial MapLibre `load` event occurred; this milestone remains true across style replacements. |
+| Point data present | `data-map-data-ready="true"` | Latest `set_features` collection is nonempty; becomes false for an empty collection. |
+| Actionable pin | `queryRenderedFeatures` on the intended pin layers | A pin is currently rendered in the viewport. |
+
+The four map attributes start as `"false"` and reset on hook destruction.
+Style readiness alone does not guarantee that asynchronous source processing
+has rendered a feature. Area-only maps need their own data condition:
+`data-map-data-ready` describes points only. The server `:ready` event still
+fires at initial map load and is a useful cue for the first data push.
+
+The mounted container exposes `element.phxMaplibre`: a frozen interface with
+`map` (the MapLibre instance) and a `pointsData` getter reflecting the latest
+collection. Treat the collection as read-only. The interface is removed on
+destruction; reacquire it after navigation. There is no need to inspect
+private `window.liveSocket` objects.
+
+For a canvas visibility test, checking the canvas is sufficient:
+
+```js
+await page.goto("/");
+await expect(page.locator("#tracker-map canvas")).toBeVisible();
+```
+
+For pin selection, wait for style and point data, choose a real coordinate,
+then poll for an actual rendered pin. This example uses the default point
+layers and zooms past clustering; adjust the zoom for your configuration:
+
+```js
+const selector = "#tracker-map";
+const container = page.locator(selector);
+await expect(container).toHaveAttribute("data-map-hook-ready", "true");
+await expect(container).toHaveAttribute("data-map-style-ready", "true");
+await expect(container).toHaveAttribute("data-map-data-ready", "true");
+
+await page.evaluate((selector) => {
+  const {map, pointsData} = document.querySelector(selector).phxMaplibre;
+  map.jumpTo({center: pointsData.features[0].geometry.coordinates, zoom: 15});
+}, selector);
+
+const layers = ["unclustered-points", "animated-points"];
+await expect.poll(() => page.evaluate(({selector, layers}) => {
+  const {map} = document.querySelector(selector).phxMaplibre;
+  const existing = layers.filter(id => map.getLayer(id));
+  return existing.length ? map.queryRenderedFeatures({layers: existing}).length : 0;
+}, {selector, layers})).toBeGreaterThan(0);
+
+const pixel = await page.evaluate(({selector, layers}) => {
+  const {map} = document.querySelector(selector).phxMaplibre;
+  const feature = map.queryRenderedFeatures({
+    layers: layers.filter(id => map.getLayer(id)),
+  })[0];
+  const projected = map.project(feature.geometry.coordinates);
+  const rect = map.getContainer().getBoundingClientRect();
+  return {x: rect.left + projected.x, y: rect.top + projected.y};
+}, {selector, layers});
+await page.mouse.click(pixel.x, pixel.y);
+await expect(page.locator("#detail-panel")).toBeVisible();
+```
+
+Live updates can move pins between querying and clicking. Keep this interval
+short and assert the resulting selection. Do not use `map.loaded()` as a
+universal readiness gate: continuously updated sources can keep it false.
+
+For a simulation survival test, expose a server update revision on an
+application element, increment it when a broadcast is handled, and wait for
+it to change. In the GSD demo, connectivity is exposed as
+`#gsd-connection-status[data-connection="live"]` and updates as
+`#gsd-tracker[data-simulation-revision]`:
+
+```js
+await expect(page.locator("#gsd-connection-status"))
+  .toHaveAttribute("data-connection", "live");
+await expect(page.locator('[id^="map-tracker-"] canvas')).toBeVisible();
+const tracker = page.locator("#gsd-tracker");
+const revision = await tracker.getAttribute("data-simulation-revision");
+await expect(tracker).not.toHaveAttribute("data-simulation-revision", revision);
+```
+
+This observes a received update rather than assuming a tick occurred after a
+fixed sleep. Map mounting, connectivity, and update receipt stay separate.
+
+For your own connection indicator, register an application hook and keep its
+state across server patches:
+
+```js
+const ConnectionStatus = {
+  mounted() { this.setConnection(true); },
+  reconnected() { this.setConnection(true); },
+  disconnected() { this.setConnection(false); },
+  updated() { this.setConnection(this.connectionLive); },
+  setConnection(live) {
+    this.connectionLive = live;
+    this.el.dataset.connection = live ? "live" : "offline";
+  },
+};
+// Include ConnectionStatus in the LiveSocket's hooks option.
+```
+
+```heex
+<span id="connection-status" phx-hook="ConnectionStatus"
+      data-connection="offline" role="status">Connection</span>
+```
+
+A mounted map can remain visible while disconnected, so use the connection
+indicator when a test needs server interaction.
+
+
 esbuild resolves `import "phx_maplibre"` Node-style, walking `NODE_PATH`.
 Where to point it depends on how you consume the library:
 

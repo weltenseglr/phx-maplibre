@@ -43,6 +43,7 @@ defmodule GsdTrackerWeb.MapLive do
       |> assign(:selected_gsd, nil)
       |> assign(:gsd_detail, nil)
       |> assign(:map_ready, false)
+      |> assign(:simulation_revision, 0)
 
     if connected?(socket) do
       Phoenix.PubSub.subscribe(GsdTracker.PubSub, @topic)
@@ -62,7 +63,11 @@ defmodule GsdTrackerWeb.MapLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash}>
-      <div class="flex h-full min-h-0 w-full flex-1 flex-col lg:flex-row">
+      <div
+        id="gsd-tracker"
+        data-simulation-revision={@simulation_revision}
+        class="flex h-full min-h-0 w-full flex-1 flex-col lg:flex-row"
+      >
         <div class="h-1/2 w-full lg:h-full lg:w-2/3">
           <PhxMaplibre.Components.map
             id={@map_id}
@@ -89,6 +94,7 @@ defmodule GsdTrackerWeb.MapLive do
   def handle_info({:update, %{positions: positions, stats: stats}}, socket) do
     socket =
       socket
+      |> update(:simulation_revision, &(&1 + 1))
       |> assign(:all_positions, positions)
       |> assign(:stats, stats)
       |> refresh_detail(positions)
