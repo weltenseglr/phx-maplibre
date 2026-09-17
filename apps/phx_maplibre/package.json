@@ -6,6 +6,25 @@
   "type": "module",
   "main": "priv/js/phx_maplibre.js",
   "peerDependencies": {
-    "maplibre-gl": ">= 5.0.0 < 6.0.0"
+    "maplibre-gl": ">= 5.0.0 < 6.0.0",
+    "@watergis/maplibre-gl-terradraw": ">= 1.16.0 < 2.0.0",
+    "terra-draw": ">= 1.33.0 < 2.0.0",
+    "terra-draw-maplibre-gl-adapter": ">= 1.4.1 < 2.0.0"
+  },
+  "exports": {
+    ".": "./priv/js/phx_maplibre.js",
+    "./editor": "./priv/js/editor.js",
+    "./editor.css": "./priv/css/editor.css"
+  },
+  "peerDependenciesMeta": {
+    "@watergis/maplibre-gl-terradraw": {
+      "optional": true
+    },
+    "terra-draw": {
+      "optional": true
+    },
+    "terra-draw-maplibre-gl-adapter": {
+      "optional": true
+    }
   }
 }

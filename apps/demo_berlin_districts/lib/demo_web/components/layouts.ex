@@ -48,6 +48,9 @@ defmodule DemoWeb.Layouts do
             <.link navigate={~p"/explore"} class="btn btn-ghost">Explore</.link>
           </li>
           <li>
+            <.link navigate={~p"/polygons"} class="btn btn-ghost">Polygons</.link>
+          </li>
+          <li>
             <a href="https://phoenixframework.org/" class="btn btn-ghost">Website</a>
           </li>
           <li>

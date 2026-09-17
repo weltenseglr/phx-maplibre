@@ -322,7 +322,7 @@ export function createFakeMaplibre() {
  * dispatch commands the way LiveView's `push_event` would).
  */
 export function createCtx({id = "map-1", config = {}} = {}) {
-  const el = {id, dataset: {config: JSON.stringify(config)}}
+  const el = Object.assign(new EventTarget(), {id, dataset: {config: JSON.stringify(config)}})
   const handlers = new Map()
   const pushedEvents = []
 

@@ -1,0 +1,26 @@
+[
+  {
+    "name": "inserted siblings sort before original successor",
+    "mode": "polygon",
+    "geometry": {"type": "Polygon", "coordinates": [[[0,0],[4,0],[0,4],[0,0]]]},
+    "vertex_ids": ["a","b","c"],
+    "operations": [
+      {"type":"insert","vertex_id":"z","after_id":"a","coordinate":[2,0]},
+      {"type":"insert","vertex_id":"d","after_id":"a","coordinate":[1,0]}
+    ],
+    "expected_vertex_ids": ["a","d","z","b","c"],
+    "expected_coordinates": [[[0,0],[1,0],[2,0],[4,0],[0,4],[0,0]]]
+  },
+  {
+    "name": "movement followed by whole-feature delta",
+    "mode": "polygon",
+    "geometry": {"type": "Polygon", "coordinates": [[[0,0],[4,0],[0,4],[0,0]]]},
+    "vertex_ids": ["a","b","c"],
+    "operations": [
+      {"type":"move","vertex_id":"a","coordinate":[1,1]},
+      {"type":"translate","delta":[1,2]}
+    ],
+    "expected_vertex_ids": ["a","b","c"],
+    "expected_coordinates": [[[2,3],[5,2],[1,6],[2,3]]]
+  }
+]

@@ -1,0 +1,8 @@
+.phx-maplibre-editor { display: flex; flex-direction: column; gap: .75rem; }
+.phx-maplibre-editor label { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.phx-maplibre-editor input[type=range], .phx-maplibre-editor input[type=text] { width: 100%; }
+.phx-maplibre-editor button { padding: .35rem .65rem; border: 1px solid currentColor; border-radius: .25rem; }
+.phx-maplibre-editor [data-role=error] { color: #dc2626; }
+.phx-maplibre-editor ul { display: flex; flex-direction: column; gap: .35rem; list-style: none; padding: 0; }
+.phx-maplibre-editor [data-role=details] { font-size: .85rem; overflow-wrap: anywhere; }
+.phx-maplibre-cursor { font-size: .8rem; pointer-events: none; white-space: nowrap; }

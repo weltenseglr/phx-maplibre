@@ -53,7 +53,8 @@ defmodule PhxMaplibre.MixProject do
 
   defp package do
     [
-      files: ~w(lib priv package.json mix.exs .formatter.exs README.md CHANGELOG.md LICENSE),
+      files:
+        ~w(lib priv examples package.json mix.exs .formatter.exs README.md CHANGELOG.md LICENSE),
       licenses: ["EUPL-1.2"],
       links: %{"GitHub" => @source_url},
       maintainers: ["weltenseglr"]
@@ -64,7 +65,11 @@ defmodule PhxMaplibre.MixProject do
     [
       main: "readme",
       source_ref: "v#{@version}",
-      extras: ["README.md", "CHANGELOG.md"]
+      extras: [
+        "README.md",
+        "CHANGELOG.md",
+        "examples/ash_postgis_editor.md"
+      ]
     ]
   end
 end

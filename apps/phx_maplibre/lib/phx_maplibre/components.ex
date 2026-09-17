@@ -14,6 +14,21 @@ defmodule PhxMaplibre.Components do
   @default_events PhxMaplibre.Event.default_event_names()
 
   @doc """
+  Renders the explicitly enabled shared editor's companion panel.
+
+  Import `phx_maplibre/editor`, register `PhxMaplibreEditorHook`, and call
+  `PhxMaplibre.LiveView.attach_editor/3` separately. The ordinary map component
+  does not include or initialize editor code.
+  """
+  attr :id, :string, required: true
+  attr :map_id, :string, required: true
+  attr :config, :map, default: %{}
+  attr :class, :any, default: nil
+  slot :inner_block
+
+  def editor(assigns), do: PhxMaplibre.Editor.Components.editor(assigns)
+
+  @doc """
   Renders a MapLibre map container.
 
   Two things have to be in place for it to come alive: the `PhxMaplibreHook`
@@ -45,6 +60,12 @@ defmodule PhxMaplibre.Components do
   returned feature collection as read-only. Wait for style readiness before querying layers, then poll `queryRenderedFeatures`
   for the specific actionable layer needed by the test. LiveView connectivity
   and application update receipt are separate application states.
+
+  Browser extensions can listen for the bubbling DOM event
+  `phx-maplibre:style-changing` on the container. It fires synchronously before
+  a command or theme change replaces the style, while existing layers still
+  exist. Detach extension layers then, and reattach when `data-map-style-ready`
+  becomes `"true"` again.
 
   ## Example
 

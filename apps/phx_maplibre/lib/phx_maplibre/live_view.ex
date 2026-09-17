@@ -81,6 +81,20 @@ defmodule PhxMaplibre.LiveView do
   @default_max_payload_bytes 512 * 1024
 
   @doc """
+  Explicitly enables the optional shared editor for this LiveView.
+
+  Requires an explicitly started `PhxMaplibre.Editor.Runtime`, a `:document_id`,
+  and a separately rendered `PhxMaplibre.Components.editor/1`. Ordinary maps
+  never register editor hooks or subscribe to editor documents.
+  """
+  def attach_editor(socket, editor_id, opts),
+    do: PhxMaplibre.Editor.LiveView.attach(socket, editor_id, opts)
+
+  @doc "Removes an optional editor registration and its collaboration presence."
+  def detach_editor(socket, editor_id),
+    do: PhxMaplibre.Editor.LiveView.detach(socket, editor_id)
+
+  @doc """
   Installs the hooks that relay map events and commands for this LiveView.
 
   Use this once in the LiveView that renders a map, then call `attach_map/3`

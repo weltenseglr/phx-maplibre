@@ -10,6 +10,7 @@ defmodule Demo.Application do
       {DNSCluster,
        query: Application.get_env(:demo_berlin_districts, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Demo.PubSub},
+      {PhxMaplibre.Editor.Runtime, name: Demo.EditorRuntime, pubsub: Demo.PubSub},
       DemoWeb.Endpoint
     ]
 

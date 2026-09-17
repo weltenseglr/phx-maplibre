@@ -161,6 +161,7 @@ function registerCommands(hook) {
       hook.popup = null
       clearPopupTracking(hook)
     }
+    hook.el.dispatchEvent(new CustomEvent("phx-maplibre:style-changing", {bubbles: true}))
     hook.map.setStyle(style, {diff: true})
   })
 

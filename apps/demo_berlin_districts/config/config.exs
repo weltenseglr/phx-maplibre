@@ -25,6 +25,7 @@ config :esbuild,
     env: %{
       "NODE_PATH" => [
         Path.expand("../assets", __DIR__),
+        Path.expand("../assets/node_modules", __DIR__),
         Path.expand("../../../deps", __DIR__),
         Path.expand("../..", __DIR__),
         Mix.Project.build_path()

@@ -265,7 +265,8 @@ Where to point it depends on how you consume the library:
       cd: Path.expand("../assets", __DIR__),
       env: %{
         "NODE_PATH" => [
-          Path.expand("../assets", __DIR__),      # local node_modules (maplibre-gl)
+          Path.expand("../assets", __DIR__),
+          Path.expand("../assets/node_modules", __DIR__), # drawing peers installed by the app
           Path.expand("../../../deps", __DIR__),  # shared umbrella deps
           Path.expand("../..", __DIR__),          # apps/ — resolves `phx_maplibre` directly
           Mix.Project.build_path()
@@ -768,6 +769,175 @@ serve. Production consumers should self-host the style JSON (and its tile
 sources) or at least pin and review the specific style version they point to,
 rather than trusting a mutable public URL indefinitely.
 
+## Optional shared feature editor
+
+Feature editing is an explicit opt-in. Ordinary maps use only the existing
+map component and `createMapHook`; they do not import Terra Draw or WaterGIS,
+start editor processes, or require drawing packages.
+
+```js
+// Map-only application: no editor dependencies required.
+import maplibregl from "maplibre-gl";
+import {createMapHook} from "phx_maplibre";
+const hooks = {PhxMaplibreHook: createMapHook(maplibregl)};
+```
+
+An editing application installs the optional drawing peers:
+
+```sh
+npm install @watergis/maplibre-gl-terradraw@1.16.0 terra-draw@1.33.0 terra-draw-maplibre-gl-adapter@1.4.1
+```
+
+When using Phoenix's esbuild wrapper, include your application's
+`assets/node_modules` explicitly in `NODE_PATH`, alongside the directory that
+contains `phx_maplibre` (`deps` for Hex, or `apps` for an umbrella sibling).
+Drawing peers are imported from the library's real path, so searching only the
+app's JavaScript source directory is insufficient.
+
+Register the separate editor hook and WaterGIS control styles alongside the
+ordinary map hook:
+
+```js
+import maplibregl from "maplibre-gl";
+import {createMapHook} from "phx_maplibre";
+import {createEditorHook, getEditorHandle} from "phx_maplibre/editor";
+import "@watergis/maplibre-gl-terradraw/dist/maplibre-gl-terradraw.css";
+import "phx_maplibre/editor.css";
+
+const hooks = {
+  PhxMaplibreHook: createMapHook(maplibregl),
+  PhxMaplibreEditorHook: createEditorHook(maplibregl),
+};
+// Pass hooks to your LiveSocket. Reacquire the editor handle after remount.
+```
+
+If esbuild bundles the CSS imports above, include its emitted CSS file in your
+page. Phoenix applications that build their main stylesheet with Tailwind can
+instead place these imports in `assets/css/app.css` and omit the JavaScript
+CSS imports:
+
+```css
+@import "../node_modules/@watergis/maplibre-gl-terradraw/dist/maplibre-gl-terradraw.css";
+/* Hex dependency, relative to assets/css/app.css: */
+@import "../../deps/phx_maplibre/priv/css/editor.css";
+/* Umbrella sibling: use ../../../phx_maplibre/priv/css/editor.css instead. */
+```
+
+The relative WaterGIS path avoids a Tailwind resolver issue with that package's
+CSS export conditions. Keep these styles explicit so map-only pages need no
+editor stylesheet.
+
+Start an editor runtime explicitly in your application's supervision tree.
+The default storage is ephemeral; stopping the runtime discards its documents.
+Document processes are started lazily when an editor attaches.
+
+```elixir
+children = [
+  {Phoenix.PubSub, name: MyApp.PubSub},
+  {PhxMaplibre.Editor.Runtime, name: MyApp.EditorRuntime, pubsub: MyApp.PubSub}
+]
+```
+
+Attach both the map and editor in your LiveView. Editor IDs identify browser
+instances; document IDs identify shared feature sets. Two editors using the
+same document ID share a document, while different document IDs remain isolated.
+
+```elixir
+use PhxMaplibre.LiveView
+
+# In mount/3, after assigning the current user:
+socket =
+  socket
+  |> PhxMaplibre.LiveView.attach_map("features-map", pubsub: MyApp.PubSub)
+  |> PhxMaplibre.LiveView.attach_editor("features-editor",
+    runtime: MyApp.EditorRuntime,
+    document_id: "shared-polygons",
+    modes: ["polygon", "select"],
+    user: %{id: "user-42", name: "Visitor", color: "#f97316"}
+  )
+```
+
+```heex
+<PhxMaplibre.Components.map id="features-map" cluster={false} />
+<PhxMaplibre.Components.editor
+  id="features-editor"
+  map_id="features-map"
+  config={%{}}
+/>
+```
+
+Use the same configuration in `attach_editor` and the editor component.
+`modes` selects enabled WaterGIS modes, `control` selects `"draw"` or `"measure"`,
+`control_options` passes control options (default `%{"open" => true}`), and
+`fields` selects the built-in `"name"` and `"color"` property inputs. Other
+application properties can be changed through the editor handle. Available
+drawing modes are `point`, `marker`, `linestring`, `polyline`, `polygon`,
+`rectangle`, `circle`, `freehand`, `freehand-linestring`, `angled-rectangle`,
+`sensor`, `sector`, and `text`; control modes are `render`, `select`,
+`delete-selection`, `delete`, `undo`, `redo`, and `download`. Omit `modes` to
+use the library's complete supported list. The shared
+update interval initially defaults to 500 ms and can be changed through the
+editor; all editors in that document use the authoritative value.
+
+The library owns drawing, shared operations, optimistic reconciliation,
+acknowledgements, reconnect, preview and cursor rendering, and style lifecycle.
+Application UI can use `getEditorHandle(element)` rather than implementing its
+own gesture engine or synchronization protocol. Feature properties remain
+application data; editor coordinate IDs, modes, history, and acknowledgements
+are separate metadata. Epoch and revision identify document state, so a reset
+can replace a client's previous document.
+
+### Browser commands and readiness
+
+`getEditorHandle(element)` returns `null` before mounting and after destruction.
+The frozen handle exposes `map`, `draw`, a copied `state`, `online`, `select(id)`,
+`setMode(mode)`, `mutate(payload)`, `undo()`, and `redo()`. Custom UI should use
+these commands to preserve the library's collaboration protocol.
+
+The editor dispatches the bubbling `phx-maplibre:editor-ready` event after the
+map style and drawing control are ready. It can fire again following style
+restoration; remove listeners when your application UI is destroyed.
+
+```js
+const element = document.getElementById("features-editor");
+element.addEventListener("phx-maplibre:editor-ready", () => {
+  const editor = getEditorHandle(element);
+  // Network readiness is independent of map readiness.
+  if (editor?.online) editor.setMode("polygon");
+});
+```
+
+### Persistence and ownership
+
+Storage and document ownership are independent, optional application adapters:
+
+```elixir
+{PhxMaplibre.Editor.Runtime,
+ name: MyApp.EditorRuntime,
+ pubsub: MyApp.PubSub,
+ storage: {MyApp.EditorStorage, repo: MyApp.Repo},
+ owner: {MyApp.EditorOwner, registry: MyApp.DocumentRegistry}}
+```
+
+`PhxMaplibre.Editor.Storage.load(document_id, opts)` returns `{:ok, state}`,
+`{:ok, nil}` for an absent document, or `{:error, reason}`.
+`commit(document_id, expected_version, next_state, opts)` returns `:ok` or
+`{:error, reason}`. Commit must compare the expected `{generation, revision}` and
+persist the entire opaque document state atomically. Saving GeoJSON alone loses
+stable coordinate IDs, insertion anchors, tombstones, and acknowledgements.
+A failed commit must leave both persisted geometry and collaboration state
+unchanged; success must precede a shared broadcast.
+
+`PhxMaplibre.Editor.Owner.resolve(document_id, opts)` returns `{:ok, pid}` for
+the single authoritative document process or `{:error, reason}`. Without an
+owner adapter, the explicitly started runtime owns its local documents. Shared
+PubSub and shared storage alone do not elect an owner across nodes: applications
+using several runtimes must route each document to one owner.
+
+See [the Ash/PostGIS persistence example](examples/ash_postgis_editor.md) for
+an application adapter that keeps queryable geometry and editor state in one
+transaction. Ash and PostGIS are not dependencies of phx-maplibre.
+
 ## Telemetry
 
 Both events carry `%{system_time: System.system_time()}` as measurements.
@@ -799,9 +969,74 @@ events to cull the feature set to what's on screen. Start at
 is smaller: three maps on one page, covering clustering, area hover,
 geolocation, and theme switching.
 
+### Browser extensions and style changes
+
+A map container dispatches the bubbling DOM event
+`phx-maplibre:style-changing` synchronously before `set_style` commands or
+theme changes replace its style. Extensions using `getMapHandle(container)`
+can listen to this event to detach their own sources, layers, and controls
+while the previous style still exists. Observe `data-map-style-ready` becoming
+`"true"` to attach them again after the library restores its own layers.
+Remove extension listeners when their LiveView hook is destroyed.
+
+### Browser update gate
+
+`createUpdateGate` is an optional, transport-independent browser send gate.
+It calls `send(reason)` immediately on the first movement sample or an explicit
+interaction, sooner on smoothed acceleration/direction changes, and every
+500 ms when updates are pending. Movement-triggered early sends have a 35 ms
+minimum interval; explicit interactions bypass it. No timer runs when idle.
+Samples are CSS-pixel `[x, y]` positions, so behavior is independent of map zoom.
+
+```js
+import {createUpdateGate} from "phx_maplibre/editor";
+
+const gate = createUpdateGate({send: () => flushQueuedUpdates()});
+// After storing the latest cursor position:
+canvas.addEventListener("pointermove", event => gate.sample([event.clientX, event.clientY]));
+// After storing a click, release, insertion, or removal:
+gate.request({immediate: true});
+// For queued geometry changes without a new pointer sample:
+gate.request();
+```
+
+The caller retains its payloads and operation queues; the gate never drops or
+coalesces operations and does not implement transport backpressure. Keep one
+request in flight if ordering requires it, and remember when a gated send is
+waiting for that request. A reply alone should not trigger an ungated send.
+`flush()` sends pending work immediately, `reset()` cancels pending scheduling
+and movement history (e.g. on disconnect), and `destroy()` permanently stops
+the gate. `setHeartbeatMs(ms)` changes the heartbeat at runtime and reschedules
+pending work without clearing it. Acceleration approvals remain eligible for
+earlier sends; the effective movement minimum is clamped to the heartbeat
+when it is shorter than `minIntervalMs`. Remove your DOM listeners when
+navigating away.
+
+Options default to `heartbeatMs: 500`, `minIntervalMs: 35`,
+`accelerationThreshold: 0.004` px/ms², `speedChangeThreshold: 0.12` px/ms,
+`minDistance: 2` pixels, and `smoothingMs: 40`. Early movement sends require all
+three thresholds. Timing functions `now`, `setTimeout`, and `clearTimeout`
+can be injected for deterministic tests. This utility does not change the
+map hook's existing event behavior unless an application explicitly uses it.
+
 ## License
 
 EUPL-1.2, with an explicit clarification that commercial use — internal
 business use, powering commercial SaaS, and paid services or support — is
 permitted and encouraged. See
 [LICENSE](https://github.com/weltenseglr/phx-maplibre/blob/main/apps/phx_maplibre/LICENSE).
+
+Editor feature IDs use Terra Draw’s UUID4 strategy. Preserve those UUIDs in storage; application IDs can be stored in feature properties. Server-generated IDs also use UUID4.
+
+Runtime limits apply to every document it owns: `max_features` (default 1,000),
+`max_vertices` (default and maximum 1,000 live coordinates per feature), and
+`max_payload_bytes` (default 262,144). The LiveView integration also accepts
+`max_event_payload_bytes` (default 524,288). Draft checkpoints are sampled to
+1,000 coordinates; history retains 100 gestures per actor. Completed geometry
+is validated in full, so exceeding its coordinate limit rejects the commit.
+
+```elixir
+{PhxMaplibre.Editor.Runtime,
+ name: MyApp.EditorRuntime, pubsub: MyApp.PubSub,
+ max_features: 250, max_vertices: 500, max_payload_bytes: 131_072}
+```

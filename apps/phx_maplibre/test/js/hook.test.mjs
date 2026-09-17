@@ -325,6 +325,19 @@ describe("hook integration", () => {
     assert.deepStrictEqual(ctx.map.getSource("areas").getData(), areasGeo)
   })
 
+  it("notifies extensions synchronously before replacing a style", () => {
+    const {ctx} = mountAndLoad()
+    let notified = false
+    ctx.el.addEventListener("phx-maplibre:style-changing", event => {
+      assert.strictEqual(event.bubbles, true)
+      assert.ok(ctx.map.getSource("areas"))
+      assert.strictEqual(ctx.map.styleCalls.length, 0)
+      notified = true
+    })
+    ctx.command("set_style", {style: "https://example.com/new.json"})
+    assert.strictEqual(notified, true)
+  })
+
   it("set_style removes an open popup, which the new style has nothing to anchor", () => {
     const {ctx, maplibregl} = mountAndLoad()
     const popup = new maplibregl.Popup()
@@ -679,9 +692,16 @@ describe("browser readiness contract", () => {
 
   it("invalidates readiness for theme changes too", async () => {
     const {ctx, hook} = mountAndLoad()
+    let changing = false
+    ctx.el.addEventListener("phx-maplibre:style-changing", () => {
+      assert.ok(ctx.map.getSource("areas"))
+      assert.equal(ctx.map.styleCalls.length, 0)
+      changing = true
+    })
     document.documentElement.dataset.theme = "dark"
     ctx.themeObserver._trigger([{attributeName: "data-theme"}])
     await new Promise(resolve => setTimeout(resolve, 350))
+    assert.equal(changing, true)
     assert.equal(ctx.el.dataset.mapStyleReady, "false")
     ctx.map._fire("style.load")
     assert.equal(ctx.el.dataset.mapStyleReady, "true")

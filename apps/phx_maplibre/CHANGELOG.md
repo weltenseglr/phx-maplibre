@@ -1,25 +1,52 @@
 # Changelog
 
-## 0.2.0 (2026-09-16)
+All notable changes to this project will be documented in this file.
 
-Cluster spiderfying.
+The format is based on [Keep a Changelog 2.0.0](https://keepachangelog.com/en/2.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Added an optional shared feature editor, imported through `phx_maplibre/editor`
+  and attached with `Components.editor` and `LiveView.attach_editor`. Map-only
+  imports exclude the drawing packages and do not start an editor runtime.
+- Added explicit, document-scoped editor runtime supervision and application
+  storage/ownership contracts. Geometry and collaboration history commit
+  together before broadcasting; document epochs distinguish resets.
+- Declared WaterGIS, Terra Draw, and its MapLibre adapter as optional peers.
 - Added the optional `cluster_spiderfy_zoom` component attribute. Below the
   configured zoom, a cluster click zooms no farther than the threshold; at or
   above it, the cluster expands into individually selectable points with
   leader lines.
+- Spiderfied selections preserve the original GeoJSON feature, including its
+  stable id, coordinates, and properties.
+
+### Changed
+
+- Evolved the unreleased polygon-editor prototype into the optional library
+  integration. The demo now uses the public runtime, component, and hook APIs.
+- Export `createUpdateGate` from the optional editor entry for browser-side adaptive send scheduling with
+  immediate interactions, acceleration-based updates, and a 500 ms
+  pending-update heartbeat.
+- Added the synchronous `phx-maplibre:style-changing` DOM event so browser
+  extensions can detach their layers before command or theme style swaps.
 - Clustering remains active throughout MapLibre's normal map zoom range when
   cluster spiderfying is configured. Animated point presentation is disabled
   in this mode so one source owns the visible point state.
-- Spiderfied selections preserve the original GeoJSON feature, including its
-  stable id, coordinates, and properties.
 - Expansion now hides only the selected native cluster and restores it on
   zoom, source updates, style changes, or a background click. Stale
   `getClusterLeaves` responses are ignored after the interaction is canceled.
+
+### Fixed
+
 - Fixed cluster clicks jumping directly to maximum zoom when their calculated
   expansion zoom exceeded the spiderfy threshold.
 
-## 0.1.0 (2026-09-10)
+## [0.1.0] - 2026-09-10
+
+### Added
 
 Animated position transitions.
 
@@ -51,6 +78,9 @@ Animated position transitions.
   10 frames per second.
 - `createMapHook` gained `now`/`raf`/`caf` timing seams (test injection;
   production defaults unchanged).
+
+[Unreleased]: https://github.com/weltenseglr/phx-maplibre/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/weltenseglr/phx-maplibre/releases/tag/v0.1.0
 
 A PubSub-first MapLibre GL JS integration for Phoenix LiveView:
 

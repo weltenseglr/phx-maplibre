@@ -25,12 +25,13 @@ import {LiveSocket} from "phoenix_live_view"
 import topbar from "../vendor/topbar"
 import maplibregl from "maplibre-gl"
 import {createMapHook} from "phx_maplibre"
+import {createEditorHook} from "phx_maplibre/editor"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {PhxMaplibreHook: createMapHook(maplibregl)},
+  hooks: {PhxMaplibreHook: createMapHook(maplibregl), PhxMaplibreEditorHook: createEditorHook(maplibregl)},
 })
 
 // Show progress bar on live navigation and form submits
