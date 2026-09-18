@@ -5,14 +5,29 @@ set -euo pipefail
 verify_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$verify_root"
 
-server_pid=""
+if command -v asdf >/dev/null 2>&1; then
+  # asdf 0.16+ is a binary: unlike the legacy shell implementation it does
+  # not alter PATH when invoked, so non-interactive verification must prefer
+  # its shims explicitly.
+  asdf_data_dir="${ASDF_DATA_DIR:-$HOME/.asdf}"
+  if [[ -d "$asdf_data_dir/shims" ]]; then
+    export PATH="$asdf_data_dir/shims:$PATH"
+  fi
+elif [[ -f "$HOME/.asdf/asdf.sh" ]]; then
+  # Legacy asdf releases need their shell integration loaded first.
+  . "$HOME/.asdf/asdf.sh"
+fi
+
+server_pids=()
 verify_tmp="$(mktemp -d)"
+demo_port=4101
+gsd_port=4102
 
 cleanup() {
-  if [[ -n "$server_pid" ]]; then
+  for server_pid in "${server_pids[@]}"; do
     kill "$server_pid" 2>/dev/null || true
     wait "$server_pid" 2>/dev/null || true
-  fi
+  done
 
   rm -rf "$verify_tmp"
 }
@@ -27,7 +42,7 @@ mix format --check-formatted
   MIX_ENV=test mix ecto.migrate
 )
 MIX_ENV=test mix test
-node --test apps/phx_maplibre/test/js/
+node --test apps/phx_maplibre/test/js/*.test.mjs
 
 npm ci --prefix apps/demo_berlin_districts
 npm ci --prefix apps/demo_berlin_districts/assets
@@ -55,10 +70,10 @@ MIX_ENV=dev mix gsd_tracker.fetch_land_cover
   mix assets.build
 )
 
-MIX_ENV=dev mix phx.server > "$verify_tmp/phx-server.log" 2>&1 &
-server_pid="$!"
+DEMO_PORT="$demo_port" GSD_PORT="$gsd_port" MIX_ENV=dev mix phx.server > "$verify_tmp/phx-server.log" 2>&1 &
+server_pids=("$!")
 
-for port in 4001 4002; do
+for port in "$demo_port" "$gsd_port"; do
   for attempt in $(seq 1 60); do
     if curl -sSf -o /dev/null "http://127.0.0.1:${port}/"; then
       break
@@ -75,10 +90,10 @@ done
 
 (
   cd apps/demo_berlin_districts
-  npx playwright test --reporter=line
+  PLAYWRIGHT_BASE_URL="http://127.0.0.1:${demo_port}" npx playwright test --reporter=line --workers=1
 )
 
 (
   cd apps/demo_gsd_tracker
-  npx playwright test --reporter=line
+  GSD_PORT="$gsd_port" npx playwright test --reporter=line
 )

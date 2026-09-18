@@ -284,9 +284,24 @@ async function runHoverScenario(page, testInfo, { injectDuplicateMeasuredPhase =
   })
 
   await installInstrumentation(page)
+  // The hover contract concerns the local district source, not basemap tiles.
+  await page.route('https://basemaps.cartocdn.com/gl/**/style.json', route => route.fulfill({json: {
+    version: 8,
+    sources: {},
+    layers: [{id: 'background', type: 'background', paint: {'background-color': '#ffffff'}}],
+  }}))
   await page.setViewportSize({ width: 1600, height: 1400 })
-  await page.goto(`${baseURL}/map`, { waitUntil: "networkidle" })
-  await sleep(3_000)
+  await page.goto(`${baseURL}/map`)
+  await expect.poll(() => page.evaluate(mapIdPrefix => {
+    const hook = window.__findMapHook(mapIdPrefix)
+    return {
+      hookReady: Boolean(hook?.ready),
+      featuresReady: Boolean(hook?.areasData?.features.length),
+      layerReady: Boolean(hook?.map.getLayer('area-fill')),
+      sourceReady: Boolean(hook?.map.getSource('areas') && hook.map.isSourceLoaded('areas')),
+    }
+  }, MAP_ID_PREFIX), {timeout: 15_000, message: 'district source is ready for hover queries'})
+    .toEqual({hookReady: true, featuresReady: true, layerReady: true, sourceReady: true})
 
   let preparation = await page.evaluate(async (mapIdPrefix) => {
     const sleep = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms))
@@ -295,8 +310,6 @@ async function runHoverScenario(page, testInfo, { injectDuplicateMeasuredPhase =
       for (let attempt = 0; attempt < 20; attempt += 1) {
         const hook = window.__findMapHook(mapIdPrefix)
         if (hook && hook.map && typeof hook.map.queryRenderedFeatures === "function") {
-          if (hook.map.loaded()) return hook
-          await new Promise((resolve) => hook.map.once("idle", resolve))
           return hook
         }
         await sleep(250)
@@ -314,10 +327,12 @@ async function runHoverScenario(page, testInfo, { injectDuplicateMeasuredPhase =
     const element = window.__findMapElement(mapIdPrefix)
     const rect = element.getBoundingClientRect()
 
-    const waitForIdle = () => new Promise((resolve) => map.once("idle", resolve))
-
-    map.fitBounds([[13.05, 52.32], [13.78, 52.68]], { padding: 24, duration: 0 })
-    await waitForIdle()
+    // Listen before the camera change and wait for the rendered camera, rather
+    // than global idle (which may never occur while other sources are updating).
+    await new Promise(resolve => {
+      map.once('render', resolve)
+      map.fitBounds([[13.05, 52.32], [13.78, 52.68]], { padding: 24, duration: 0 })
+    })
 
     const flattenCoordinates = (coordinates) => {
       if (!Array.isArray(coordinates) || coordinates.length === 0) return []

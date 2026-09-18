@@ -11,6 +11,9 @@ module.exports = defineConfig({
   baseURL,
   testDir: "./tests",
   timeout: 30_000,
+  // Editor files all mutate and clear the demo's shared-drawings document.
+  // Serial describe blocks only serialize tests within each individual file.
+  workers: 1,
   retries: 0,
   reporter: "html",
   use: {

@@ -7,7 +7,7 @@ async function open(page) {
   await page.route('https://basemaps.cartocdn.com/gl/**/style.json', route => route.fulfill({json:{version:8,glyphs:'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',sources:{},layers:[{id:'background',type:'background',paint:{'background-color':route.request().url().includes('dark')?'#111111':'#ffffff'}}]}}))
 
   await page.addInitScript(() => document.addEventListener("phx-maplibre:editor-ready", e => { window.editor = e.detail }))
-  await page.goto(`${baseURL}/polygons`)
+  await page.goto(`${baseURL}/editor`)
   await expect(page.locator("#shared-editor")).toHaveAttribute("data-editor-ready", "true")
   await expect.poll(() => page.evaluate(() => Boolean(window.editor?.online)), {timeout:30000}).toBe(true)
 }

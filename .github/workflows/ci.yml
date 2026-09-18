@@ -34,19 +34,19 @@ jobs:
       PGPASSWORD: postgres
 
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
         with:
           otp-version: "27.x"
           elixir-version: "1.20.x"
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Restore deps and build cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             deps
@@ -123,7 +123,7 @@ jobs:
           MIX_ENV: test
 
       - name: Run the phx_maplibre JS unit tests
-        run: node --test apps/phx_maplibre/test/js/
+        run: node --test apps/phx_maplibre/test/js/*.test.mjs
 
       - name: Build demo_berlin_districts assets
         run: |
@@ -142,8 +142,12 @@ jobs:
         working-directory: apps/demo_gsd_tracker
 
   playwright:
-    name: Playwright (both demo apps)
+    name: Playwright (MapLibre ${{ matrix.maplibre_gl }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        maplibre_gl: ["6.10.0", "5.x"]
 
     services:
       postgis:
@@ -165,19 +169,19 @@ jobs:
       PGPASSWORD: postgres
 
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
         with:
           otp-version: "27.x"
           elixir-version: "1.20.x"
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Restore deps and build cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             deps
@@ -195,6 +199,11 @@ jobs:
           npm ci --prefix apps/demo_berlin_districts/assets
           npm ci --prefix apps/demo_gsd_tracker
           npm ci --prefix apps/demo_gsd_tracker/assets
+
+      - name: Select MapLibre 5 compatibility dependency
+        if: matrix.maplibre_gl == '5.x'
+        run: npm install --no-save --package-lock=false maplibre-gl@^5
+        working-directory: apps/demo_berlin_districts/assets
 
       # Each demo pins its own @playwright/test version, so the matching
       # browser build is installed from each app directory.
@@ -272,7 +281,7 @@ jobs:
 
       - name: Upload Playwright artifacts
         if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: playwright-artifacts
           path: |
@@ -282,16 +291,46 @@ jobs:
             phx-server.log
           if-no-files-found: ignore
 
+  podman-devcontainer:
+    name: Devcontainer (Podman)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # ubuntu-latest also ships Docker Compose. Without this, `podman compose`
+      # delegates to that plugin, which expects a Podman Docker API socket.
+      PODMAN_COMPOSE_PROVIDER: podman-compose
+      DEVCONTAINER_USERNS_MODE: keep-id
+      # podman-compose preserves `..` in `compose config`; give the
+      # devcontainer CLI the absolute checkout instead.
+      DEVCONTAINER_BUILD_CONTEXT: ${{ github.workspace }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install the Podman compose provider
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes podman podman-compose
+
+      # This is the integration lane for the developer environment itself:
+      # build with Podman, run postCreate, then execute the same complete
+      # verification command used locally and by the pre-commit hook.
+      - name: Build and verify the Podman devcontainer
+        run: |
+          npx --yes @devcontainers/cli up --docker-path podman --workspace-folder .
+          npx --yes @devcontainers/cli exec --docker-path podman --workspace-folder . \
+            bash /workspace/scripts/verify
+
   release:
     name: Build Hex package and publish GitHub Release
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [test, playwright]
+    needs: [test, playwright, podman-devcontainer]
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1
         with:
@@ -303,34 +342,29 @@ jobs:
           mix local.hex --force
           mix local.rebar --force
 
-      - name: Fetch production dependencies
+      - name: Fetch release dependencies
         run: mix deps.get
         env:
-          MIX_ENV: prod
+          MIX_ENV: dev
 
       - name: Verify the tag matches the package version
         run: |
-          version="$(mix run --no-start --eval 'IO.write(Mix.Project.config()[:version])')"
+          version="$(grep -E '^[[:space:]]*@version "' mix.exs | cut -d '"' -f2)"
+          test -n "$version"
           test "$GITHUB_REF_NAME" = "v$version"
         working-directory: apps/phx_maplibre
-        env:
-          MIX_ENV: prod
-          # `mix run` evaluates the umbrella runtime config even with
-          # `--no-start`; these values satisfy its validation only.
-          SECRET_KEY_BASE: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-          DATABASE_URL: ecto://postgres:postgres@localhost/gsd_tracker_prod
 
       - name: Build the Hex package
         run: mix hex.build
         working-directory: apps/phx_maplibre
         env:
-          MIX_ENV: prod
+          MIX_ENV: dev
 
       - name: Publish the Hex package
         run: mix hex.publish --yes
         working-directory: apps/phx_maplibre
         env:
-          MIX_ENV: prod
+          MIX_ENV: dev
           HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
 
       - name: Create or update GitHub Release

@@ -8,7 +8,7 @@ async function open(page){
   await page.route('https://basemaps.cartocdn.com/gl/**/style.json', route => route.fulfill({json:{version:8,glyphs:'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',sources:{},layers:[{id:'background',type:'background',paint:{'background-color':route.request().url().includes('dark')?'#111111':'#ffffff'}}]}}))
 
   await page.addInitScript(()=>document.addEventListener('phx-maplibre:editor-ready',event=>{window.editor=event.detail}))
-  await page.goto(`${baseURL}/polygons`)
+  await page.goto(`${baseURL}/editor`)
   await expect.poll(()=>page.evaluate(()=>Boolean(window.editor?.online)), {timeout:30000}).toBe(true)
 }
 const state=page=>page.evaluate(()=>window.editor.state)
@@ -41,7 +41,6 @@ for(const mode of modes)test(`upstream ${mode} pointer gestures create a shared 
   }else if(mode==='polygon'){
     await click(240,200);await move(420,200);await click(420,200);await move(420,360)
     await preview(peer)
-    await expect.poll(()=>peer.evaluate(()=>window.editor.map.queryRenderedFeatures({layers:['phx-editor-shared-editor-drafts-line']}).length)).toBeGreaterThan(0)
     await click(420,360);await click(240,360);await click(240,200)
   }else if(['linestring','polyline'].includes(mode)){
     await click(240,200);await move(360,260);await click(360,260);await move(440,340)

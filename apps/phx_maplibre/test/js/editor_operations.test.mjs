@@ -1,6 +1,6 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {coordinateState, geometryOperations, editingFeature, acceptSnapshot, projectFeature, isHelperFeature} from '../../priv/js/editor/operations.mjs'
+import {coordinateState, geometryOperations, editingFeature, acceptSnapshot, projectFeature, isHelperFeature, sanitizeFinishedFeature} from '../../priv/js/editor/operations.mjs'
 const feature = {type:'Feature',id:'f',properties:{name:'test'},geometry:{type:'LineString',coordinates:[[0,0],[1,1]]}}
 const metadata = {mode:'linestring',vertex_ids:['a','b'],nodes:{a:{id:'a',after:null,coordinate:[0,0],seed:true},b:{id:'b',after:'a',coordinate:[1,1],seed:true}}}
 test('properties and replacement projection are independent of translation branch', () => {
@@ -40,6 +40,24 @@ test('editing restores mode metadata and rounds coordinates without changing app
 test('Terra helper features must remain owned by its active gesture', () => {
   for (const key of ['midPoint','selectionPoint','closingPoint','snappingPoint','coordinatePoint']) assert.equal(isHelperFeature({...feature,properties:{[key]:true}}),true)
   assert.equal(isHelperFeature(feature),false)
+})
+test('finished freehand strokes normalize repeated and self-crossing samples into a valid boundary', () => {
+  const feature = {type:'Feature',id:'freehand',properties:{mode:'freehand'},geometry:{type:'Polygon',coordinates:[[[0,0],[2,2],[2,2],[0,2],[2,0],[0,0]]]}}
+  const normalized = sanitizeFinishedFeature(feature)
+  const ring = normalized.geometry.coordinates[0]
+  assert.deepEqual(ring, [[0,0],[2,0],[2,2],[0,2],[0,0]])
+  assert.deepEqual(ring[0], ring.at(-1))
+  assert.equal(new Set(ring.slice(0,-1).map(JSON.stringify)).size, ring.length - 1)
+  assert.notDeepEqual(normalized.geometry, feature.geometry)
+  assert.deepEqual(feature.geometry.coordinates[0][2], [2,2])
+})
+test('finished freehand normalization preserves valid concave rings and leaves degenerate strokes for server rejection', () => {
+  const concave = {type:'Feature',properties:{mode:'freehand'},geometry:{type:'Polygon',coordinates:[[[0,0],[2,0],[1,1],[2,2],[0,2],[0,0]]]}}
+  assert.deepEqual(sanitizeFinishedFeature(concave), concave)
+  const degenerate = {...concave,geometry:{type:'Polygon',coordinates:[[[0,0],[1,1],[2,2],[0,0]]]}}
+  assert.deepEqual(sanitizeFinishedFeature(degenerate), degenerate)
+  const ordinary = {...degenerate,properties:{mode:'polygon'}}
+  assert.deepEqual(sanitizeFinishedFeature(ordinary), ordinary)
 })
 
 // One wire fixture drives both client projection and the authoritative reducer.

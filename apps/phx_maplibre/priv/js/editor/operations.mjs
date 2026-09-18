@@ -38,6 +38,50 @@ export function boundedPreview(feature, maxCoordinates = 1000) {
   }
   return result
 }
+
+const sameCoordinate = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === 2 && b.length === 2 && a[0] === b[0] && a[1] === b[1]
+const validCoordinate = coordinate => Array.isArray(coordinate) && coordinate.length === 2 && coordinate.every(Number.isFinite) && coordinate[0] >= -180 && coordinate[0] <= 180 && coordinate[1] >= -90 && coordinate[1] <= 90
+const cross = (a, b, c) => (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+const onSegment = (a, b, c) => c[0] >= Math.min(a[0], b[0]) && c[0] <= Math.max(a[0], b[0]) && c[1] >= Math.min(a[1], b[1]) && c[1] <= Math.max(a[1], b[1])
+const intersects = (a, b, c, d) => {
+  const abC = cross(a, b, c), abD = cross(a, b, d), cdA = cross(c, d, a), cdB = cross(c, d, b)
+  return (abC * abD < 0 && cdA * cdB < 0) || (Math.abs(abC) < 1e-14 && onSegment(a, b, c)) || (Math.abs(abD) < 1e-14 && onSegment(a, b, d)) || (Math.abs(cdA) < 1e-14 && onSegment(c, d, a)) || (Math.abs(cdB) < 1e-14 && onSegment(c, d, b))
+}
+const ringArea = ring => ring.slice(1).reduce((sum, point, index) => sum + ring[index][0] * point[1] - point[0] * ring[index][1], 0)
+const simpleRing = ring => {
+  const edges = ring.slice(1).map((point, index) => [ring[index], point])
+  return !edges.some(([a, b], index) => edges.some(([c, d], other) => other > index + 1 && !(index === 0 && other === edges.length - 1) && intersects(a, b, c, d)))
+}
+const validRing = ring => ring.length >= 4 && ring.length <= 1001 && sameCoordinate(ring[0], ring.at(-1)) && ring.every(validCoordinate) && new Set(ring.slice(0, -1).map(JSON.stringify)).size === ring.length - 1 && Math.abs(ringArea(ring)) > 1e-12 && simpleRing(ring)
+const sample = (coordinates, limit) => coordinates.length <= limit ? coordinates : Array.from({length: limit}, (_, index) => coordinates[Math.round(index * (coordinates.length - 1) / (limit - 1))])
+const convexHull = coordinates => {
+  const points = [...coordinates].sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  const build = values => values.reduce((hull, point) => {
+    while (hull.length > 1 && cross(hull.at(-2), hull.at(-1), point) <= 0) hull.pop()
+    hull.push(point)
+    return hull
+  }, [])
+  const lower = build(points), upper = build([...points].reverse())
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)]
+}
+
+// Pointer sampling can leave a freehand stroke with repeated vertices or a
+// self-crossing closing edge. Preserve a valid ring as drawn; otherwise use
+// its convex boundary so the authoritative validator receives a safe polygon.
+export function sanitizeFinishedFeature(feature, mode = feature.properties?.mode) {
+  const result = clone(feature)
+  if (mode !== "freehand" || result.geometry?.type !== "Polygon" || result.geometry.coordinates?.length !== 1) return result
+  const source = result.geometry.coordinates[0] || []
+  const open = (sameCoordinate(source[0], source.at(-1)) ? source.slice(0, -1) : source)
+    .filter(validCoordinate)
+    .filter((point, index, points) => index === 0 || !sameCoordinate(point, points[index - 1]))
+  const vertices = sample(open, 1000)
+  const ring = [...vertices, vertices[0]]
+  const boundary = convexHull(vertices)
+  const normalized = validRing(ring) ? ring : [...boundary, boundary[0]]
+  if (validRing(normalized)) result.geometry.coordinates = [normalized]
+  return result
+}
 export function coordinateState(feature, metadata = {}, newId = () => crypto.randomUUID()) {
   const geometry = feature.geometry
   const coordinates = geometry.type === "Point" ? [geometry.coordinates] : geometry.type === "LineString" ? geometry.coordinates :

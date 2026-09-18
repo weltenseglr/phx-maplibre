@@ -1,6 +1,6 @@
 defmodule DemoWeb.Layouts do
   @moduledoc """
-  Layouts shared across the app: the navbar/theme-toggle shell and the
+  Layouts shared across the app: the phx-maplibre demo navbar/theme-toggle shell and the
   flash group.
   """
   use DemoWeb, :html
@@ -8,7 +8,7 @@ defmodule DemoWeb.Layouts do
   embed_templates "layouts/*"
 
   @doc """
-  The app layout: navbar (logo, Map/Explore links, theme toggle) around
+  The app layout: navbar (phx-maplibre brand, map, explore, editor links, and theme toggle) around
   the page content, plus the flash group.
 
   ## Examples
@@ -35,8 +35,9 @@ defmodule DemoWeb.Layouts do
     <header class="navbar px-4 sm:px-6 lg:px-8">
       <div class="flex-1">
         <a href="/" class="flex-1 flex w-fit items-center gap-2">
-          <img src={~p"/images/logo.svg"} width="36" />
-          <span class="text-sm font-semibold">v{Application.spec(:phoenix, :vsn)}</span>
+          <img src={~p"/images/phx-maplibre.svg"} width="36" alt="" />
+          <span class="text-sm font-semibold">phx-maplibre</span>
+          <span class="text-xs opacity-60">Demo</span>
         </a>
       </div>
       <div class="flex-none">
@@ -48,13 +49,7 @@ defmodule DemoWeb.Layouts do
             <.link navigate={~p"/explore"} class="btn btn-ghost">Explore</.link>
           </li>
           <li>
-            <.link navigate={~p"/polygons"} class="btn btn-ghost">Polygons</.link>
-          </li>
-          <li>
-            <a href="https://phoenixframework.org/" class="btn btn-ghost">Website</a>
-          </li>
-          <li>
-            <a href="https://github.com/phoenixframework/phoenix" class="btn btn-ghost">GitHub</a>
+            <.link navigate={~p"/editor"} class="btn btn-ghost">Shared editor</.link>
           </li>
           <li>
             <.theme_toggle />

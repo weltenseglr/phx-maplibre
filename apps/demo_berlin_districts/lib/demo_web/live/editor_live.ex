@@ -1,11 +1,11 @@
-defmodule DemoWeb.PolygonsLive do
+defmodule DemoWeb.EditorLive do
   use DemoWeb, :live_view
   use PhxMaplibre.LiveView
 
   @impl true
   def mount(_params, session, socket) do
     viewer = session["viewer_id"] || Base.encode16(:crypto.strong_rand_bytes(16), case: :lower)
-    map_id = "map-polygons-" <> viewer
+    map_id = "map-editor-" <> viewer
 
     config = %{
       modes: PhxMaplibre.Editor.Config.modes(),
@@ -13,6 +13,17 @@ defmodule DemoWeb.PolygonsLive do
       control_options: %{open: true, showDeleteConfirmation: false},
       fields: ["name", "color"]
     }
+
+    editor_options =
+      [
+        runtime: Demo.EditorRuntime,
+        document_id: "shared-drawings",
+        user: %{
+          id: viewer,
+          name: "Visitor " <> String.slice(viewer, 0, 4),
+          color: "#" <> String.slice(viewer, 0, 6)
+        }
+      ] ++ Map.to_list(config)
 
     {:ok,
      socket
@@ -23,16 +34,7 @@ defmodule DemoWeb.PolygonsLive do
        zoom: Demo.Map.default_zoom()
      )
      |> PhxMaplibre.LiveView.attach_map(map_id, pubsub: Demo.PubSub, events: [:ready])
-     |> PhxMaplibre.LiveView.attach_editor("shared-editor",
-       runtime: Demo.EditorRuntime,
-       document_id: "shared-drawings",
-       modes: config.modes,
-       user: %{
-         id: viewer,
-         name: "Visitor " <> String.slice(viewer, 0, 4),
-         color: "#" <> String.slice(viewer, 0, 6)
-       }
-     )}
+     |> PhxMaplibre.LiveView.attach_editor("shared-editor", editor_options)}
   end
 
   @impl true
@@ -42,8 +44,8 @@ defmodule DemoWeb.PolygonsLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} fluid={true}>
-      <div class="polygon-editor">
-        <aside class="polygon-sidebar">
+      <div class="feature-editor">
+        <aside class="feature-editor-sidebar">
           <PhxMaplibre.Components.editor id="shared-editor" map_id={@map_id} config={@editor_config}>
             <h1 class="text-xl font-semibold">Shared drawings</h1>
             <p class="text-sm opacity-70">
@@ -52,7 +54,7 @@ defmodule DemoWeb.PolygonsLive do
             </p>
           </PhxMaplibre.Components.editor>
         </aside>
-        <div class="polygon-map">
+        <div class="feature-editor-map">
           <PhxMaplibre.Components.map
             id={@map_id}
             center={@center}

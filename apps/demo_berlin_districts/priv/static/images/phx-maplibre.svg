@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title>phx-maplibre</title>
+  <path fill="#2563eb" d="M8 12 28 6l28 8v38L36 58 8 50z"/>
+  <path fill="#93c5fd" d="m8 12 20 8v38L8 50zM28 20l28-6v38L36 58V28z"/>
+  <path fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="m16 39 10-13 10 8 12-17"/>
+  <circle cx="16" cy="39" r="3" fill="#fff"/><circle cx="26" cy="26" r="3" fill="#fff"/><circle cx="36" cy="34" r="3" fill="#fff"/><circle cx="48" cy="17" r="3" fill="#fff"/>
+</svg>

@@ -3,7 +3,7 @@ import {TerraDrawModeUndoRedo} from "terra-draw"
 import {getMapHandle} from "./browser.js"
 import {createUpdateGate} from "./update_gate.js"
 import {createCursorMotion} from "./editor/cursor_motion.mjs"
-import {clone, coordinateState, geometryOperations, editingFeature, acceptSnapshot, projectFeature, isHelperFeature, mutableProperties, previewFeature, boundedPreview, takeGestureBatch} from "./editor/operations.mjs"
+import {clone, coordinateState, geometryOperations, editingFeature, acceptSnapshot, projectFeature, isHelperFeature, mutableProperties, previewFeature, boundedPreview, takeGestureBatch, sanitizeFinishedFeature} from "./editor/operations.mjs"
 
 export {createUpdateGate} from "./update_gate.js"
 
@@ -50,7 +50,7 @@ export function createEditorHook(maplibregl) {
       this.observer = new MutationObserver(() => this.setup())
       this.observer.observe(this.container, {attributes: true, attributeFilter: ["data-map-style-ready", "data-map-hook-ready"]})
       const hook = this
-      handles.set(this.el, Object.freeze({get map() { return hook.map }, get draw() { return hook.draw }, get state() { return clone(hook.snapshot) }, get online() { return hook.online }, select: id => hook.select(id), setMode: mode => hook.draw?.setMode(mode), mutate: payload => new Promise(resolve => hook.mutate(payload, resolve)), undo: () => hook.historyAction("undo"), redo: () => hook.historyAction("redo")}))
+      handles.set(this.el, Object.freeze({get map() { return hook.map }, get draw() { return hook.draw }, get state() { return clone(hook.snapshot) }, get online() { return hook.online }, select: id => hook.select(id), setMode: mode => { hook.mode = mode; hook.draw?.setMode(mode) }, mutate: payload => new Promise(resolve => hook.mutate(payload, resolve)), undo: () => hook.historyAction("undo"), redo: () => hook.historyAction("redo")}))
       this.setup(); this.synchronize()
     },
     request(event, payload = {}, callback) {
@@ -81,12 +81,8 @@ export function createEditorHook(maplibregl) {
       if (this.container.dataset.mapStyleReady !== "true") return
       if (this.control) {
         if (this.stylePaused) {
-          this.applying = true
-          try {
-            this.draw.start(); this.stylePaused = false
-            for (const feature of this.draw.getSnapshot()) this.draw.updateFeatureGeometry(feature.id, feature.geometry)
-            this.reconcile(); this.renderShared(); this.renderPresence()
-          } finally { this.applying = false }
+          this.stylePaused = false
+          this.renderShared(); this.renderPresence()
           this.el.dataset.editorReady = "true"
           this.el.dispatchEvent(new CustomEvent("phx-maplibre:editor-ready", {bubbles: true, detail: getEditorHandle(this.el)}))
         }
@@ -158,11 +154,11 @@ export function createEditorHook(maplibregl) {
       if (!this.snapshot?.features.some(f => f.id === id)) {
         if (this.creating.has(id)) return
         this.creating.add(id)
-        const mode = feature.properties.mode, ordinary = clone(feature)
+        const mode = feature.properties.mode, completed = sanitizeFinishedFeature(feature, mode), ordinary = clone(completed)
         const terraProperties = clone(feature.properties); delete ordinary.properties.mode; delete ordinary.properties.currentlyDrawing; delete ordinary.properties.selected
         ordinary.properties = Object.fromEntries((this.config.fields || ["name","color"]).filter(key => feature.properties[key] !== undefined).map(key => [key,feature.properties[key]]))
         if ((this.config.fields || ["name", "color"]).includes("color") && !ordinary.properties.color) ordinary.properties.color = this.identityColor || "#3b82f6"
-        const state = coordinateState(feature)
+        const state = coordinateState(completed)
         this.mutate({action: "create", feature: ordinary, mode, mode_properties: terraProperties, vertex_ids: state?.ids || []}, () => { this.creating.delete(id); this.draft = null; this.reconcile(); this.sendPresence() })
       } else {
         this.queueModeProperties(id, feature)
@@ -323,12 +319,9 @@ export function createEditorHook(maplibregl) {
       if (list) { list.replaceChildren(); for (const feature of this.snapshot?.features || []) { const button = document.createElement("button"); button.type = "button"; button.dataset.featureId = feature.id; button.textContent = feature.properties?.name || `${this.snapshot.metadata?.[feature.id]?.mode || feature.geometry.type} ${String(feature.id).slice(0, 8)}`; list.append(button) } }
     },
     pauseStyle() {
-      if (!this.draw || this.stylePaused) return
-      this.gate.flush(); this.gate.reset(); this.stylePaused = true; this.el.dataset.editorReady = "false"
-      // stop unregisters rendering/input only; unlike upstream deactivate it
-      // leaves draft IDs, mode counters, selection handles and history intact.
-      this.applying = true
-      try { this.draw.stop() } finally { this.applying = false }
+      // The WaterGIS control restores itself through MapLibre's style lifecycle.
+      // Keep it active: pausing resets upstream per-mode gesture state.
+      this.stylePaused = true; this.el.dataset.editorReady = "false"
     },
     teardownControl() {
       this.mode = this.draw?.getMode() || this.mode; this.gate?.flush(); this.gate?.reset()

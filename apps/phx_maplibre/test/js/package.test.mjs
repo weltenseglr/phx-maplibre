@@ -30,3 +30,8 @@ test("map entry keeps the optional editor out of its module graph", async () => 
 test("drawing peers are optional for map-only installations", () => {
   for (const peer of editorPeers) assert.equal(manifest.peerDependenciesMeta[peer]?.optional, true)
 })
+
+test("MapLibre peer range admits the tested 5.x and 6.x compatibility lanes", () => {
+  // Check the actual whole range, including the absence of extra restrictions.
+  assert.match(manifest.peerDependencies["maplibre-gl"], /^>=\s*5\.0\.0\s+<\s*7\.0\.0$/)
+})

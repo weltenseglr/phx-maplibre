@@ -11,6 +11,12 @@ RUN apt-get update && \
         libgdal-dev \
         libpq-dev \
         build-essential \
+        autoconf \
+        m4 \
+        libssl-dev \
+        libncurses-dev \
+        libssh-dev \
+        unixodbc-dev \
         gnupg \
         lsb-release \
         software-properties-common \
@@ -33,14 +39,25 @@ RUN curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | \
     apt-get install -y --no-install-recommends postgresql-client-18 && \
     rm -rf /var/lib/apt/lists/*
 
-ENV PATH="/usr/lib/postgresql/18/bin:${PATH}"
+ENV ASDF_DIR=/home/vscode/.asdf \
+    ASDF_DATA_DIR=/home/vscode/.asdf \
+    MIX_HOME=/home/vscode/.mix \
+    HEX_HOME=/home/vscode/.hex \
+    KERL_CONFIGURE_OPTIONS="--without-wx"
+ENV PATH="/home/vscode/.asdf/shims:/home/vscode/.asdf/bin:/usr/lib/postgresql/18/bin:${PATH}"
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends erlang erlang-dev elixir && \
-    rm -rf /var/lib/apt/lists/*
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends nodejs npm && \
-    rm -rf /var/lib/apt/lists/*
+# Keep the shell-based asdf version used by the former runtime features.
+# Runtime versions themselves are defined only in .tool-versions.
+RUN mkdir -p /home/vscode/.mix /home/vscode/.hex && \
+    git clone --depth 1 --branch v0.12.0 https://github.com/asdf-vm/asdf.git /home/vscode/.asdf && \
+    chown -R vscode:vscode /home/vscode/.asdf /home/vscode/.mix /home/vscode/.hex
 
 WORKDIR /workspace
+
+COPY .tool-versions /workspace/.tool-versions
+COPY .devcontainer/install-tools.sh /usr/local/bin/install-project-tools
+RUN bash /usr/local/bin/install-project-tools
+RUN chown -R vscode:vscode /home/vscode/.asdf /home/vscode/.mix /home/vscode/.hex
+
+# Raw compose/container exec must use UTF-8 too, not just editor sessions.
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8

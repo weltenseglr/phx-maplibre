@@ -56,14 +56,33 @@ defmodule GsdTracker.MixProject do
       "assets.setup": [
         "cmd --cd assets npm install",
         "tailwind.install --if-missing",
-        "esbuild.install --if-missing"
+        "esbuild.install --if-missing",
+        &copy_maplibre_worker/1
       ],
-      "assets.build": ["tailwind demo_gsd_tracker", "esbuild demo_gsd_tracker"],
+      "assets.build": [
+        &copy_maplibre_worker/1,
+        "tailwind demo_gsd_tracker",
+        "esbuild demo_gsd_tracker"
+      ],
       "assets.deploy": [
+        &copy_maplibre_worker/1,
         "tailwind demo_gsd_tracker --minify",
         "esbuild demo_gsd_tracker --minify",
         "phx.digest"
       ]
     ]
+  end
+
+  defp copy_maplibre_worker(_args) do
+    dist = "assets/node_modules/maplibre-gl/dist"
+
+    # MapLibre 5 embeds its worker; 6 ships a module and its shared dependency.
+    if File.exists?(Path.join(dist, "maplibre-gl-worker.mjs")) do
+      File.mkdir_p!("priv/static/assets/js")
+
+      for file <- ["maplibre-gl-worker.mjs", "maplibre-gl-shared.mjs"] do
+        File.cp!(Path.join(dist, file), Path.join("priv/static/assets/js", file))
+      end
+    end
   end
 end

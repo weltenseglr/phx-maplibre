@@ -1,4 +1,4 @@
-defmodule DemoWeb.PolygonsLiveTest do
+defmodule DemoWeb.EditorLiveTest do
   use DemoWeb.ConnCase, async: false
   import Phoenix.LiveViewTest
   alias PhxMaplibre.Editor.{Document, Runtime}
@@ -21,8 +21,8 @@ defmodule DemoWeb.PolygonsLiveTest do
   end
 
   test "demo configures the library editor and shares features", %{conn: conn, doc: doc} do
-    {:ok, first, html} = live(conn, ~p"/polygons")
-    {:ok, second, _} = live(build_conn(), ~p"/polygons")
+    {:ok, first, html} = live(conn, ~p"/editor")
+    {:ok, second, _} = live(build_conn(), ~p"/editor")
     assert html =~ "Shared drawings"
     assert has_element?(first, "#shared-editor[phx-hook=PhxMaplibreEditorHook]")
     id = "test-" <> Integer.to_string(System.unique_integer([:positive]))
@@ -56,8 +56,8 @@ defmodule DemoWeb.PolygonsLiveTest do
 
   test "same-session tabs have separate actors and shared settings", %{conn: conn, doc: doc} do
     conn = init_test_session(conn, %{"viewer_id" => "abcdef0123456789abcdef0123456789"})
-    {:ok, first, _} = live(conn, ~p"/polygons")
-    {:ok, second, _} = live(conn, ~p"/polygons")
+    {:ok, first, _} = live(conn, ~p"/editor")
+    {:ok, second, _} = live(conn, ~p"/editor")
     actors = Document.snapshot(doc).presence.entries |> Enum.map(& &1.actor_id)
     assert length(Enum.uniq(actors)) == 2
     event(first, "settings", %{update_interval_ms: 25})
@@ -71,7 +71,7 @@ defmodule DemoWeb.PolygonsLiveTest do
   end
 
   test "invalid creation leaves authoritative state intact", %{conn: conn, doc: doc} do
-    {:ok, view, _} = live(conn, ~p"/polygons")
+    {:ok, view, _} = live(conn, ~p"/editor")
     before = Document.snapshot(doc)
     event(view, "mutate", %{action: "create", mode: "polygon", feature: %{geometry: nil}})
     assert Document.snapshot(doc).features == before.features

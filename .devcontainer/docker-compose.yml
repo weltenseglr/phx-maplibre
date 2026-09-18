@@ -1,16 +1,24 @@
 services:
   app:
+    init: true
+    # Docker's default namespace is compatible with the host checkout. Rootless
+    # Podman must use keep-id so the non-root `vscode` user can read and write it.
+    userns_mode: ${DEVCONTAINER_USERNS_MODE:-host}
     build:
-      context: .
-      dockerfile: Dockerfile
+      # podman-compose reports relative contexts unchanged; the devcontainer
+      # CLI needs an absolute one in CI. Local Docker/Podman keep `..`.
+      context: ${DEVCONTAINER_BUILD_CONTEXT:-..}
+      dockerfile: .devcontainer/Dockerfile
     image: phx-maplibre-dev:latest
     ports:
-      - "4001:4001"
-      - "4002:4002"
+      - "${DEMO_PORT:-4001}:${DEMO_PORT:-4001}"
+      - "${GSD_PORT:-4002}:${GSD_PORT:-4002}"
     volumes:
-      # :Z relabels the checkout for SELinux-enforcing Podman hosts; Docker
-      # and non-SELinux runtimes ignore the flag.
-      - ..:/workspace:Z
+      # :z gives the checkout a shared Podman SELinux label. Docker ignores
+      # it, while the shared label lets either runtime use the same checkout
+      # without fighting over private :Z MCS labels.
+      - ..:/workspace:z
+      - phx_build:/workspace/_build
       - ${HOME}/.config/opencode:/root/.config/opencode
       - ${HOME}/.local/share/opencode/auth.json:/root/.local/share/opencode/auth.json
     working_dir: /workspace
@@ -21,10 +29,18 @@ services:
       PGUSER: postgres
       PGPASSWORD: postgres
       PGDATABASE: phx_maplibre_dev
+      # Keep endpoint and published host ports aligned. This permits Docker and
+      # Podman devcontainers to run concurrently with different port pairs.
+      DEMO_PORT: ${DEMO_PORT:-4001}
+      GSD_PORT: ${GSD_PORT:-4002}
     depends_on:
       postgres:
         condition: service_healthy
-    command: sleep infinity
+    # The image starts as root, but every devcontainer command runs as `vscode`.
+    # Initialize the disposable build-cache volume once so both Docker and
+    # rootless Podman can write it as that user.
+    command: >-
+      /bin/sh -c 'chown -R vscode:vscode /workspace/_build && exec sleep infinity'
 
   postgres:
     # postgis/postgis publishes amd64 only (README: "Supported architecture: amd64").
@@ -49,3 +65,4 @@ services:
 
 volumes:
   postgres_data:
+  phx_build:

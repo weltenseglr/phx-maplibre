@@ -7,7 +7,7 @@ async function open(page) {
   await page.route('https://basemaps.cartocdn.com/gl/**/style.json', route => route.fulfill({json:{version:8,glyphs:'https://fonts.openmaptiles.org/{fontstack}/{range}.pbf',sources:{},layers:[{id:'background',type:'background',paint:{'background-color':route.request().url().includes('dark')?'#111111':'#ffffff'}}]}}))
 
   await page.addInitScript(() => document.addEventListener('phx-maplibre:editor-ready',event => { window.editor = event.detail }))
-  await page.goto(`${baseURL}/polygons`)
+  await page.goto(`${baseURL}/editor`)
   await expect.poll(() => page.evaluate(() => Boolean(window.editor?.online)), {timeout:30000}).toBe(true)
 }
 const state = page => page.evaluate(() => window.editor.state)
@@ -79,6 +79,11 @@ test('an unfinished drawing continues after style replacement and editor destruc
   await page.mouse.click(bounds.x+240,bounds.y+180)
   await page.mouse.click(bounds.x+420,bounds.y+180)
   await page.mouse.move(bounds.x+420,bounds.y+320)
+  await expect.poll(()=>peer.evaluate(async()=> (await window.editor.map.getSource('phx-editor-shared-editor-drafts')?.getData())?.features?.length || 0)).toBeGreaterThan(0)
+  // A remote preview must return after a style swap without another pointer
+  // update from its owner; style restoration itself recreates our overlays.
+  await peer.evaluate(()=>{window.styleResumes=0;document.addEventListener('phx-maplibre:editor-ready',()=>window.styleResumes++);document.documentElement.setAttribute('data-theme','dark')})
+  await expect.poll(()=>peer.evaluate(()=>window.styleResumes)).toBeGreaterThan(0)
   await expect.poll(()=>peer.evaluate(async()=> (await window.editor.map.getSource('phx-editor-shared-editor-drafts')?.getData())?.features?.length || 0)).toBeGreaterThan(0)
   await page.evaluate(()=>{window.styleResumes=0;document.addEventListener('phx-maplibre:editor-ready',()=>window.styleResumes++);document.documentElement.setAttribute('data-theme','dark')})
   await expect.poll(()=>page.evaluate(()=>window.styleResumes)).toBeGreaterThan(0)

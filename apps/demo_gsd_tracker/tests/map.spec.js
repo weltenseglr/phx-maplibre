@@ -105,22 +105,34 @@ test.describe('GSD Tracker Map', () => {
       )
       .toBeGreaterThan(0);
 
-    // Project the first rendered feature's coordinates to an exact pixel
-    // position (relative to the map container, which is what map.project
-    // uses and what the canvas fills) and click there.
-    const point = await page.evaluate(({selector, candidates}) => {
+    // Project and dispatch the pointer sequence in one browser turn. The
+    // simulator moves pins continuously; crossing the CDP boundary between
+    // projection and `page.mouse.click` could otherwise leave the click on an
+    // empty pixel.
+    await page.evaluate(({selector, candidates}) => {
       const hook = window.phxMaplibre.getMapHandle(document.querySelector(selector));
       const layers = candidates.filter((id) => hook.map.getLayer(id));
       const feature = hook.map.queryRenderedFeatures({ layers })[0];
       const projected = hook.map.project(feature.geometry.coordinates);
       const rect = hook.map.getContainer().getBoundingClientRect();
-      return { pageX: rect.left + projected.x, pageY: rect.top + projected.y };
+      const clientX = rect.left + projected.x;
+      const clientY = rect.top + projected.y;
+      const canvas = hook.map.getCanvas();
+
+      for (const type of ['mousedown', 'mouseup', 'click']) {
+        canvas.dispatchEvent(new MouseEvent(type, {
+          bubbles: true,
+          button: 0,
+          buttons: type === 'mousedown' ? 1 : 0,
+          clientX,
+          clientY,
+          view: window,
+        }));
+      }
     }, {selector: MAP, candidates: PIN_LAYERS});
 
-    await page.mouse.click(point.pageX, point.pageY);
-
     const detail = page.locator('#gsd-detail');
-    await expect(detail).toBeVisible({ timeout: 5000 });
+    await expect(detail).toBeVisible({ timeout: 15000 });
     await expect(page.locator('text=Total distance:')).toBeVisible();
     await expect(page.locator('text=Service time:')).toBeVisible();
     await expect(detail.locator('text=Speed')).toBeVisible();

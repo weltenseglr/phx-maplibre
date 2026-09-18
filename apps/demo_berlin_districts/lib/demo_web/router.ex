@@ -32,7 +32,7 @@ defmodule DemoWeb.Router do
     get "/", PageController, :redirect_to_map
     live "/map", MapLive
     live "/explore", ExploreLive
-    live "/polygons", PolygonsLive
+    live "/editor", EditorLive
   end
 
   # Other scopes may use custom stacks.

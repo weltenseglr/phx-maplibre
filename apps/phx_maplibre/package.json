@@ -6,7 +6,7 @@
   "type": "module",
   "main": "priv/js/phx_maplibre.js",
   "peerDependencies": {
-    "maplibre-gl": ">= 5.0.0 < 6.0.0",
+    "maplibre-gl": ">= 5.0.0 < 7.0.0",
     "@watergis/maplibre-gl-terradraw": ">= 1.16.0 < 2.0.0",
     "terra-draw": ">= 1.33.0 < 2.0.0",
     "terra-draw-maplibre-gl-adapter": ">= 1.4.1 < 2.0.0"

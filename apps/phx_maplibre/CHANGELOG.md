@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   storage/ownership contracts. Geometry and collaboration history commit
   together before broadcasting; document epochs distinguish resets.
 - Declared WaterGIS, Terra Draw, and its MapLibre adapter as optional peers.
+- Added the optional `createUpdateGate` export for browser-side adaptive send
+  scheduling with immediate interactions, acceleration-based updates, and a
+  500 ms pending-update heartbeat.
+- Added the synchronous `phx-maplibre:style-changing` DOM event so browser
+  extensions can detach their layers before command or theme style swaps.
 - Added the optional `cluster_spiderfy_zoom` component attribute. Below the
   configured zoom, a cluster click zooms no farther than the threshold; at or
   above it, the cluster expands into individually selectable points with
@@ -25,13 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Expanded the MapLibre GL JS peer range to support both 5.x and 6.x,
+  with browser compatibility lanes for each major.
 - Evolved the unreleased polygon-editor prototype into the optional library
   integration. The demo now uses the public runtime, component, and hook APIs.
-- Export `createUpdateGate` from the optional editor entry for browser-side adaptive send scheduling with
-  immediate interactions, acceleration-based updates, and a 500 ms
-  pending-update heartbeat.
-- Added the synchronous `phx-maplibre:style-changing` DOM event so browser
-  extensions can detach their layers before command or theme style swaps.
 - Clustering remains active throughout MapLibre's normal map zoom range when
   cluster spiderfying is configured. Animated point presentation is disabled
   in this mode so one source owns the visible point state.
@@ -41,6 +43,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Served and configured MapLibre 6's separate module worker in both demos,
+  allowing GeoJSON sources and the initial map readiness event to complete.
+- Normalized completed freehand polygon samples before submission, retaining
+  valid rings and using a convex boundary for invalid sampled rings.
+- Preserved unfinished drawing gestures and restored shared draft/editing
+  overlays through map style replacement.
 - Fixed cluster clicks jumping directly to maximum zoom when their calculated
   expansion zoom exceeded the spiderfy threshold.
 

@@ -64,7 +64,7 @@ defmodule PhxMaplibre.MixProject do
   defp docs do
     [
       main: "readme",
-      source_ref: "v#{@version}",
+      source_ref: "main",
       extras: [
         "README.md",
         "CHANGELOG.md",

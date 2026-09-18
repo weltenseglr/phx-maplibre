@@ -3,14 +3,30 @@ set -euo pipefail
 
 repo_root="$(git rev-parse --show-toplevel)"
 
-# Inside a container, or without a usable Docker daemon, use the local tools.
-# Choose the runner before verification: a failed check must still block commit.
-if [[ -f /.dockerenv || -f /run/.containerenv ]] ||
-  ! command -v docker >/dev/null 2>&1 ||
-  ! docker info >/dev/null 2>&1; then
+# Inside a container, use the local tools. On the host, use the running app
+# service from Docker, then Podman; otherwise use local tools.
+if [[ -f /.dockerenv || -f /run/.containerenv ]]; then
   exec bash "$repo_root/scripts/verify"
 fi
 
-exec npx --yes @devcontainers/cli exec \
-  --workspace-folder "$repo_root" \
-  bash /workspace/scripts/verify
+app_container() {
+  "$1" ps -q \
+    --filter "label=com.docker.compose.project.working_dir=$repo_root/.devcontainer" \
+    --filter 'label=com.docker.compose.service=app' | head -n1
+}
+
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+  docker_app="$(app_container docker)"
+  if [[ -n "$docker_app" ]] && docker exec --user vscode "$docker_app" true >/dev/null 2>&1; then
+    exec docker exec --user vscode "$docker_app" bash /workspace/scripts/verify
+  fi
+fi
+
+if command -v podman >/dev/null 2>&1 && podman info >/dev/null 2>&1; then
+  podman_app="$(app_container podman)"
+  if [[ -n "$podman_app" ]] && podman exec --user vscode "$podman_app" true >/dev/null 2>&1; then
+    exec podman exec --user vscode "$podman_app" bash /workspace/scripts/verify
+  fi
+fi
+
+exec bash "$repo_root/scripts/verify"

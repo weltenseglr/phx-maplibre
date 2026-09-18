@@ -6,4 +6,8 @@ apps/*/_build
 apps/*/deps
 apps/**/node_modules
 apps/**/doc
+# Regenerated from OSM input and land-cover extraction; setup seeds the small
+# checked-in GeoJSON fixture instead. Do not send multi-gigabyte inputs to a
+# devcontainer image build.
+apps/demo_gsd_tracker/priv/data/filtered.pbf
 apps/demo_gsd_tracker/priv/data/land_covers.dump

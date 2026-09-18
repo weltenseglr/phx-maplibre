@@ -1,8 +1,13 @@
 import "phoenix_html"
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
-import maplibregl from "maplibre-gl"
+import * as maplibregl from "maplibre-gl"
 import {createMapHook, getMapHandle} from "phx_maplibre"
+
+// esbuild bundles the main module; MapLibre 6's separate worker stays static.
+if (maplibregl.getVersion?.().startsWith("6.")) {
+  maplibregl.setWorkerUrl("/assets/js/maplibre-gl-worker.mjs")
+}
 
 const csrfToken = document.querySelector("meta[name='csrf-token']")?.getAttribute("content")
 

@@ -67,11 +67,28 @@ end
 `maplibre-gl` is a peer dependency. Your app installs it and passes the module
 into the hook factory, so the library never pins a MapLibre GL version.
 
+| MapLibre GL JS | Coverage | Drawing stack |
+| --- | --- | --- |
+| 5.x | CI compatibility lane | WaterGIS 1.16.0, Terra Draw 1.33.0, adapter 1.4.1 |
+| 6.x | Demo and pre-commit lane | WaterGIS 1.16.0, Terra Draw 1.33.0, adapter 1.4.1 |
+
+The library supports both majors through its peer range. The demos pin the
+current 6.x line; CI rebuilds the Berlin editor with 5.x before running its
+browser suite.
+
+MapLibre 6 ships a separate module worker. With esbuild, serve
+`dist/maplibre-gl-worker.mjs` and `dist/maplibre-gl-shared.mjs` together from
+your static assets, then call
+`maplibregl.setWorkerUrl("/assets/js/maplibre-gl-worker.mjs")` before mounting
+any maps. Both demos copy these files during `mix assets.setup`,
+`mix assets.build`, and `mix assets.deploy`. MapLibre 5 embeds its worker and
+does not need this step.
+
 ```json
 // assets/package.json
 {
   "dependencies": {
-    "maplibre-gl": "5.24.0"
+    "maplibre-gl": "6.10.0"
   }
 }
 ```
@@ -80,7 +97,7 @@ into the hook factory, so the library never pins a MapLibre GL version.
 // assets/js/app.js
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
-import maplibregl from "maplibre-gl"
+import * as maplibregl from "maplibre-gl"
 import {createMapHook} from "phx_maplibre"
 
 const liveSocket = new LiveSocket("/live", Socket, {
@@ -777,7 +794,7 @@ start editor processes, or require drawing packages.
 
 ```js
 // Map-only application: no editor dependencies required.
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
 import {createMapHook} from "phx_maplibre";
 const hooks = {PhxMaplibreHook: createMapHook(maplibregl)};
 ```
@@ -798,7 +815,7 @@ Register the separate editor hook and WaterGIS control styles alongside the
 ordinary map hook:
 
 ```js
-import maplibregl from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
 import {createMapHook} from "phx_maplibre";
 import {createEditorHook, getEditorHandle} from "phx_maplibre/editor";
 import "@watergis/maplibre-gl-terradraw/dist/maplibre-gl-terradraw.css";
@@ -866,7 +883,9 @@ socket =
 />
 ```
 
-Use the same configuration in `attach_editor` and the editor component.
+Use the same configuration in `attach_editor` and the editor component. Build
+one configuration map and pass `Map.to_list(config)` to `attach_editor/3` to
+avoid the two declarations drifting.
 `modes` selects enabled WaterGIS modes, `control` selects `"draw"` or `"measure"`,
 `control_options` passes control options (default `%{"open" => true}`), and
 `fields` selects the built-in `"name"` and `"color"` property inputs. Other
@@ -1034,6 +1053,12 @@ Runtime limits apply to every document it owns: `max_features` (default 1,000),
 `max_event_payload_bytes` (default 524,288). Draft checkpoints are sampled to
 1,000 coordinates; history retains 100 gestures per actor. Completed geometry
 is validated in full, so exceeding its coordinate limit rejects the commit.
+
+Completed freehand polygons are first sampled to at most 1,000 vertices and
+deduplicated in the browser. Valid rings keep their shape; invalid sampled
+rings use their convex boundary when that produces a valid polygon. The
+server still validates the submitted geometry and applies any lower runtime
+limit.
 
 ```elixir
 {PhxMaplibre.Editor.Runtime,
